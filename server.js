@@ -11,10 +11,19 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./config/swagger');
+const userRoute = require('./routes/userRoute');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "http://localhost:3000" } });
+
+// Swagger UI setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "WDP API Documentation"
+}));
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -25,7 +34,13 @@ app.use(cors({
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization"
 }));
+
+
+app.use('/api/users', userRoute);
+
+
 const PORT = 5000;
 server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Swagger documentation available at http://localhost:${PORT}/api-docs`);
 });
