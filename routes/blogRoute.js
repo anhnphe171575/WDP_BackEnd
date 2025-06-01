@@ -11,7 +11,7 @@ const {
 } = require('../controller/blogController.js');
 
 // Create blog - POST /api/blogs
-router.post('/', upload.array('images', 5), createBlog);
+router.post('/', verifyToken, upload.array('images', 5), createBlog);
 
 // Get all blogs - GET /api/blogs
 router.get('/', getAllBlogs);

@@ -6,19 +6,16 @@ const fs = require("fs");
 
 
 const bodyParser = require("body-parser");
-const mongoose = require('mongoose');  // Dùng thư viện mongoose chuẩn
-const connectDB = require('./config/db'); // Hàm connectDB riêng biệt
-
+const mongoose = require("./config/db");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
-const swaggerSpecs = require('./config/swagger.js');
-const userRoute = require('./routes/userRoute.js');
-const blogRoute = require('./routes/blogRoute.js');
+const swaggerSpecs = require('./config/swagger');
+const userRoute = require('./routes/userRoute');
+const blogRoute = require('./routes/blogRoute');
 const app = express();
-
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "http://localhost:3000" } });
 
@@ -40,13 +37,12 @@ app.use(cors({
 }));
 
 
-connectDB().then(() => {
-  app.use('/api/users', userRoute);
-  app.use('/api/blogs', blogRoute);
+app.use('/api/users', userRoute);
+app.use('/api/blogs', blogRoute);
 
-  const PORT = 5000;
-  server.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`Swagger documentation available at http://localhost:${PORT}/api-docs`);
-  });
+
+const PORT = 5000;
+server.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Swagger documentation available at http://localhost:${PORT}/api-docs`);
 });
