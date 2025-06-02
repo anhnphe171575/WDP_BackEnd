@@ -5,13 +5,12 @@ const { cloudinary } = require('../config/cloudinary');
 exports.createBanner = async (req, res) => {
     try {
         // Check if file was uploaded
-        if (!req.file) {
-            return res.status(400).json({ message: 'Please upload an image' });
-        }
-
+        // if (!req.file) {
+        //     return res.status(400).json({ message: 'Please upload an image' });
+        // }
         const bannerData = {
             ...req.body,
-            imageUrl: req.file.path // Cloudinary URL
+            // imageUrl: req.file.path // Cloudinary URL
         };
 
         const banner = new Banner(bannerData);
@@ -20,7 +19,9 @@ exports.createBanner = async (req, res) => {
     } catch (error) {
         // If there's an error, delete the uploaded image from Cloudinary
         if (req.file) {
-            await cloudinary.uploader.destroy(req.file.filename);
+            // Extract public_id from the Cloudinary URL
+            const publicId = req.file.path.split('/').slice(-1)[0].split('.')[0];
+            await cloudinary.uploader.destroy(publicId);
         }
         res.status(400).json({ message: error.message });
     }
