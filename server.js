@@ -36,7 +36,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: "http://localhost:3000", // Chỉ cho phép frontend này gửi request
+  origin: "https://pestnest.vercel.app", // Chỉ cho phép frontend này gửi request
   credentials: true, // Quan trọng: Cho phép gửi cookie
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization"
