@@ -16,6 +16,13 @@ const userSchema = new mongoose.Schema({
   phone: { type: String },
   dob: { type: Date }, 
   role: { type: Number, default: 0 }, 
+  verified: { type: Boolean, default: false },
+  verificationToken: {
+    type: String,
+    trim: true,
+    
+  },
+  verificationTokenExpires: { type: Date },
  
 }, { timestamps: true });
  
