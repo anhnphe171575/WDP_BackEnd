@@ -14,9 +14,14 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
+const bannerRoute = require('./routes/bannerRoute');
+const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "http://localhost:3000" } });
+
+// Initialize Socket.IO
+setupSocket(server);
 
 // Swagger UI setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
@@ -35,6 +40,9 @@ app.use(cors({
   allowedHeaders: "Content-Type,Authorization"
 }));
 
+
+
+app.use('/api/banners', bannerRoute);
 
 app.use('/api/users', userRoute);
 
