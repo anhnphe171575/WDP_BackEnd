@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-
+const User = require('../models/userModel');
+const userController = require('../controllers/UserController')
 /**
  * @swagger
  * /users:
@@ -10,25 +11,11 @@ const router = express.Router();
  *       200:
  *         description: Thành công
  */
-router.get('/', (req, res) => {
-    try {
-        console.log('GET /api/users route hit');
-        res.status(200).json([{ id: 1, name: 'Nguyen Van A' }]);
-    } catch (error) {
-        console.error('Error in GET /api/users:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+router.get('/alluser',userController.getAllUsers)
 
-router.get('/:id', (req, res) => {
-    try {
-        console.log('GET /api/users/:id route hit');
-        res.status(200).json([{ id: 1, name: 'Nguyen Van A' }]);
-    } catch (error) {
-        console.error('Error in GET /api/users:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+
+// router.get('/myProfile',)
+
 
 
 module.exports = router;

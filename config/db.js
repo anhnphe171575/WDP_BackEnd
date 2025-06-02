@@ -1,27 +1,22 @@
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+dotenv.config();
 
-// URL kết nối (thường là mongodb://localhost:27017 hoặc URI Atlas)
-const uri = 'mongodb+srv://phuanhpro11:123@wdp.5nczhuu.mongodb.net/?retryWrites=true&w=majority&appName=WDP';
-
-// Tên database
+const uri = process.env.MONGODB_URI;
 const dbName = 'petnest';
 
-async function main() {
-  const client = new MongoClient(uri);
-
+const connectDB = async () => {
   try {
-    // Kết nối tới MongoDB
-    await client.connect();
+    await mongoose.connect(uri, {
+      dbName: dbName,
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
     console.log('Connected successfully to MongoDB');
-
-    const db = client.db(dbName);
-    // Bạn có thể thao tác với db ở đây
-
   } catch (err) {
-    console.error(err);
-  } finally {
-    await client.close();
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
   }
-}
+};
 
-main();
+module.exports = connectDB;

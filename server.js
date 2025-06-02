@@ -7,6 +7,7 @@ const fs = require("fs");
 
 const bodyParser = require("body-parser");
 const mongoose = require("./config/db");
+const connectDB = require("./config/db");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
@@ -14,9 +15,14 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
+const authRoute = require('./routes/authRoute');
+const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "http://localhost:3000" } });
+
+// Initialize Socket.IO
+setupSocket(server);
 
 // Swagger UI setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
@@ -36,8 +42,12 @@ app.use(cors({
 }));
 
 
-app.use('/api/users', userRoute);
 
+
+app.use('/api/users', userRoute);
+app.use('/api/auth', authRoute);
+
+connectDB();
 
 const PORT = 5000;
 server.listen(PORT, () => {
