@@ -17,6 +17,7 @@ const userRoute = require('./routes/userRoute');
 const productRoute = require('./routes/productRoute');
 const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
+const authRoute = require('./routes/authRoute');
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 
 const app = express();
@@ -56,6 +57,7 @@ app.use((req, res, next) => {
 
 
 app.use('/api/banners', bannerRoute);
+app.use('/api/auth', authRoute);
 app.use('/api/products', productRoute);
 app.use('/api/users', userRoute);
 app.use('/api/categories', categoriesRoute);
