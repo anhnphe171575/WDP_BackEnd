@@ -14,8 +14,11 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
-const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
+
 const categoriesRoute = require('./routes/categoriesRoute');
+const bannerRoute = require('./routes/bannerRoute');
+const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
+
 const app = express();
 const server = http.createServer(app);
 
@@ -50,6 +53,9 @@ app.use((req, res, next) => {
 });
 
 
+
+
+app.use('/api/banners', bannerRoute);
 
 app.use('/api/users', userRoute);
 app.use('/api/categories', categoriesRoute);
