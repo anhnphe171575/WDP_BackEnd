@@ -17,6 +17,6 @@ const userSchema = new mongoose.Schema({
   dob: { type: Date }, 
   role: { type: Number, default: 0 }, 
  
-}, { timestamps: true });
+}, { timestamps: true },{collection: 'users'});
  
 module.exports = mongoose.model('User', userSchema);

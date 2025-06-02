@@ -1,13 +1,18 @@
-const { createClient } = require('redis');
-
-const redisClient = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
+const Redis = require("ioredis");
+const dotenv = require('dotenv');
+dotenv.config();
+const redis = new Redis({
+    host: process.env.REDIS_HOST, // Địa chỉ Redis Server
+    port: process.env.REDIS_PORT, // Cổng mặc định của Redis
+    // password: "your_password", // Nếu Redis có đặt mật khẩu
 });
 
-redisClient.on('error', (err) => console.error('Redis Client Error', err));
+redis.on("connect", () => {
+    console.log("🟢 Connected to Redis");
+});
 
-(async () => {
-  await redisClient.connect();
-})();
+redis.on("error", (err) => {
+    console.error("❌ Redis error:", err);
+});
 
-module.exports = redisClient;
+module.exports = redis;

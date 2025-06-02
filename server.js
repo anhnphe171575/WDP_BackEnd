@@ -14,6 +14,8 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
+const productRoute = require('./routes/productRoute');
+const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
 const authRoute = require('./routes/authRoute');
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
@@ -40,13 +42,25 @@ app.use(cors({
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization"
 }));
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`${req.method} ${req.originalUrl} ${res.statusCode} in ${duration}ms`);
+  });
+
+  next();
+});
+
 
 
 
 app.use('/api/banners', bannerRoute);
 app.use('/api/auth', authRoute);
+app.use('/api/products', productRoute);
 app.use('/api/users', userRoute);
-
+app.use('/api/categories', categoriesRoute);
 
 const PORT = 5000;
 server.listen(PORT, () => {
