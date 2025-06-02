@@ -15,6 +15,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
 const bannerRoute = require('./routes/bannerRoute');
+const authRoute = require('./routes/authRoute');
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 
 const app = express();
@@ -43,7 +44,7 @@ app.use(cors({
 
 
 app.use('/api/banners', bannerRoute);
-
+app.use('/api/auth', authRoute);
 app.use('/api/users', userRoute);
 
 
