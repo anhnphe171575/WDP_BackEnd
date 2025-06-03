@@ -11,5 +11,16 @@ router.post('/verify-otp', AuthController.verifyOTP);
 // Route đặt lại mật khẩu mới
 router.post('/reset-password', AuthController.resetPassword);
 
-module.exports = router;
+/**
+ * @swagger
+ * api/auth:
+ *   post:
+ *     summary: Đăng nhập
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
 
+router.post('/login', authController.login);
+module.exports = router;
+  
