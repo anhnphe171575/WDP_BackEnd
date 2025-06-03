@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-
+const User = require('../models/userModel');
+const userController = require('../controllers/UserController')
 const banner = require('../models/bannerModel');
 /**
  * @swagger
@@ -11,6 +12,11 @@ const banner = require('../models/bannerModel');
  *       200:
  *         description: Thành công
  */
+router.get('/alluser',userController.getAllUsers)
+
+
+// router.get('/myProfile',)
+
 
 router.get('/', async (req, res) => {
     try {
@@ -21,8 +27,6 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
-
 
 
 module.exports = router;
