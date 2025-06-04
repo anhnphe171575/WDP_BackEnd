@@ -21,6 +21,6 @@ router.post('/reset-password', AuthController.resetPassword);
  *         description: Thành công
  */
 
-router.post('/login', authController.login);
+// router.post('/login', AuthController.);
 module.exports = router;
   
