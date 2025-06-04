@@ -7,6 +7,7 @@ const fs = require("fs");
 
 const bodyParser = require("body-parser");
 const mongoose = require("./config/db");
+const connectDB = require("./config/db");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
@@ -37,7 +38,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: "http://localhost:3000", // Chỉ cho phép frontend này gửi request
+  origin: "https://pestnest.vercel.app", // Chỉ cho phép frontend này gửi request
   credentials: true, // Quan trọng: Cho phép gửi cookie
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization"
@@ -53,7 +54,7 @@ app.use((req, res, next) => {
   next();
 });
 
-
+connectDB();
 
 
 app.use('/api/banners', bannerRoute);
