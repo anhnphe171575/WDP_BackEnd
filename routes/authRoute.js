@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const AuthController = require('../controllers/AuthController');
+const AuthController = require('../controllers/authController');
 
 // Route gửi OTP qua email
 router.post('/send-otp', AuthController.sendOTP);
@@ -21,6 +21,8 @@ router.post('/reset-password', AuthController.resetPassword);
  *         description: Thành công
  */
 
-router.post('/login', authController.login);
+router.post('/login', AuthController.login);
+router.post('/register', AuthController.register);
+router.get('/verify-email', AuthController.VerifyEmail);
 module.exports = router;
   
