@@ -56,7 +56,6 @@ app.use((req, res, next) => {
 });
 
 
-connectDB();
 app.use('/api/blogs', blogRoute);
 app.use('/api/banners', bannerRoute);
 app.use('/api/auth', authRoute);

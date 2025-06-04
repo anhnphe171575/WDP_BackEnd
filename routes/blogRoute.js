@@ -9,7 +9,7 @@ const {
     getBlog, 
     updateBlog, 
     deleteBlog 
-} = require('../controller/blogController.js');
+} = require('../controllers/blogController.js');
 
 // Create blog - POST /api/blogs
 router.post('/', verifyToken, upload.array('images', 5), createBlog);
