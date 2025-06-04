@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const AuthController = require('../controllers/AuthController');
+const authController = require('../controllers/authController');
 
 // Route gửi OTP qua email
-router.post('/send-otp', AuthController.sendOTP);
+router.post('/send-otp', authController.sendOTP);
 
 // Route xác thực OTP
-router.post('/verify-otp', AuthController.verifyOTP);
+router.post('/verify-otp', authController.verifyOTP);
 
 // Route đặt lại mật khẩu mới
-router.post('/reset-password', AuthController.resetPassword);
+router.post('/reset-password', authController.resetPassword);
 
 /**
  * @swagger
@@ -21,6 +21,13 @@ router.post('/reset-password', AuthController.resetPassword);
  *         description: Thành công
  */
 
+
+
 router.post('/login', authController.login);
+router.post('/register', authController.register);
+router.get('/verify-email', authController.VerifyEmail);
+
+router.post('/google', authController.googleAuth);
+
 module.exports = router;
   
