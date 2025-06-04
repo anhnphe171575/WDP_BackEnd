@@ -26,3 +26,4 @@ router.put('/:id', verifyToken, upload.array('images', 5), updateBlog);
 router.delete('/:id', verifyToken, deleteBlog);
 
 module.exports = router;
+

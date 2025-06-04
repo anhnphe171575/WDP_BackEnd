@@ -13,6 +13,9 @@ const bannerSchema = new mongoose.Schema({
   startDate: Date,
   endDate: Date,
   link: String,
-}, { timestamps: true });
+}, {
+  timestamps: true,
+  collection: 'banners'
+});
 
 module.exports = mongoose.model('Banner', bannerSchema);

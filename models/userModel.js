@@ -16,7 +16,14 @@ const userSchema = new mongoose.Schema({
   phone: { type: String },
   dob: { type: Date }, 
   role: { type: Number, default: 0 }, 
- 
-}, { timestamps: true });
+  verified: { type: Boolean, default: false },
+  verificationToken: {
+    type: String,
+    trim: true,
+  },
+  verificationTokenExpires: { type: Date },
+  googleId: { type: String, unique: true, sparse: true },
+  avatar: { type: String }
+}, { timestamps: true }, { collection: 'users' });
  
 module.exports = mongoose.model('User', userSchema);
