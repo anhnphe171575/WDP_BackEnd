@@ -1,8 +1,15 @@
 const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 const transporter = require('../config/email');
+
+const client = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    'postmessage' // This is required for the token exchange
+);
 
 exports.login = async (req, res) => {
     try {
@@ -69,7 +76,7 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
     try {
-        const { name, email, password, phone, dob} = req.body;
+        const { name, email, password, phone} = req.body;
 
         // Validate required fields
         if (!name || !email || !password) {
@@ -105,7 +112,6 @@ exports.register = async (req, res) => {
             email,
             password: hashedPassword,
             phone,
-            dob,
             role: 1, // Default role for normal user
             verified: false,
             verificationToken,
@@ -116,7 +122,7 @@ exports.register = async (req, res) => {
         await newUser.save();
 
         // Send verification email
-        const emailSent = await exports.sendVerificationEmail(email, verificationToken);
+        const emailSent = await sendVerificationEmail(email, verificationToken);
         if (!emailSent) {
             // If email sending fails, delete the user
             await User.findByIdAndDelete(newUser._id);
@@ -148,9 +154,9 @@ exports.register = async (req, res) => {
     }
 };
 
-exports.sendVerificationEmail = async (email, verificationToken) => {
+const sendVerificationEmail = async (email, verificationToken) => {
     // Tạo URL xác thực với đầy đủ thông tin
-    const verificationUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/auth/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/auth/verify-email?token=${verificationToken}`;
   
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -300,7 +306,7 @@ exports.sendVerificationEmail = async (email, verificationToken) => {
                 <h1>Email verification successful!</h1>
                 <p>Your account has been verified.</p>
                 <p>You can login to the system right now.</p>
-                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/login" class="button">Login</a>
+                <a href="${process.env.CLIENT_URL || 'http://localhost:5000'}/login" class="button">Login</a>
               </div>
             </body>
           </html>
@@ -331,3 +337,80 @@ exports.sendVerificationEmail = async (email, verificationToken) => {
       });
     }
   };
+
+exports.googleAuth = async (req, res) => {
+    try {
+        const { credential } = req.body;
+        
+        // Verify Google token
+        const ticket = await client.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        
+        const payload = ticket.getPayload();
+        const { email, name, picture, sub: googleId } = payload;
+
+        // Check if user exists
+        let user = await User.findOne({ 
+            $or: [
+                { email },
+                { googleId }
+            ]
+        });
+
+        if (!user) {
+            // Create new user if doesn't exist
+            user = new User({
+                name,
+                email,
+                password: Math.random().toString(36).slice(-8), // Random password
+                role: 1, // Default role for normal user
+                verified: true, // Google accounts are pre-verified
+                avatar: picture,
+                googleId // Store Google ID for future reference
+            });
+            await user.save();
+        } else if (!user.googleId) {
+            // If user exists but doesn't have googleId, update it
+            user.googleId = googleId;
+            if (!user.avatar) {
+                user.avatar = picture;
+            }
+            await user.save();
+        }
+
+        // Create JWT token
+        const token = jwt.sign(
+            { 
+                id: user._id,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Send response
+        res.status(200).json({
+            success: true,
+            message: 'Đăng nhập thành công',
+            token,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                avatar: user.avatar
+            }
+        });
+
+    } catch (error) {
+        console.error('Google auth error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi xác thực Google',
+            error: error.message
+        });
+    }
+};

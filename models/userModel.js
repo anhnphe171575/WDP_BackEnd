@@ -20,10 +20,10 @@ const userSchema = new mongoose.Schema({
   verificationToken: {
     type: String,
     trim: true,
-    
   },
   verificationTokenExpires: { type: Date },
- 
-}, { timestamps: true });
+  googleId: { type: String, unique: true, sparse: true },
+  avatar: { type: String }
+}, { timestamps: true }, { collection: 'users' });
  
 module.exports = mongoose.model('User', userSchema);
