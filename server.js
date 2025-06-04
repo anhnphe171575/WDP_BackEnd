@@ -14,6 +14,8 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const userRoute = require('./routes/userRoute');
+
+const blogRoute = require('./routes/blogRoute');
 const productRoute = require('./routes/productRoute');
 const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
@@ -54,7 +56,8 @@ app.use((req, res, next) => {
 });
 
 
-
+connectDB();
+app.use('/api/blogs', blogRoute);
 app.use('/api/banners', bannerRoute);
 app.use('/api/auth', authRoute);
 app.use('/api/products', productRoute);
