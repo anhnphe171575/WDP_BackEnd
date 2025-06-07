@@ -29,7 +29,7 @@ exports.login = async (req, res) => {
         // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(401).json({
+            return res.status(400).json({
                 success: false,
                 message: 'Email hoặc mật khẩu không đúng'
             });
@@ -38,10 +38,16 @@ exports.login = async (req, res) => {
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({
+            return res.status(400).json({
                 success: false,
                 message: 'Email hoặc mật khẩu không đúng'
             });
+        }
+        if(!user.verified){
+          return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email của bạn để kích hoạt tài khoản.'
+        });
         }
 
         // Create JWT token
@@ -367,7 +373,6 @@ exports.googleAuth = async (req, res) => {
             user = new User({
                 name,
                 email,
-                password: Math.random().toString(36).slice(-8), // Random password
                 role: 1, // Default role for normal user
                 verified: true, // Google accounts are pre-verified
                 avatar: picture,
