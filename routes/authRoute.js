@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AuthController = require('../controllers/AuthController');
+const authController = require('../controller/authController');
 
 // Route gửi OTP qua email
 router.post('/send-otp', AuthController.sendOTP);

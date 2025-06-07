@@ -34,11 +34,12 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
   customSiteTitle: "WDP API Documentation"
 }));
 
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: "https://pestnest.vercel.app", // Chỉ cho phép frontend này gửi request
+  origin: "http://localhost:3000", // Chỉ cho phép frontend này gửi request
   credentials: true, // Quan trọng: Cho phép gửi cookie
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization"
@@ -54,7 +55,6 @@ app.use((req, res, next) => {
   next();
 });
 
-connectDB();
 
 
 app.use('/api/banners', bannerRoute);

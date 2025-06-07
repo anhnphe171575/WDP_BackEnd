@@ -8,11 +8,11 @@ const bannerSchema = new mongoose.Schema({
   description: String,
   imageUrl: {
     type: String,
-    required: true
+    default: 'https://via.placeholder.com/150'
   },
   status: {
     type: String,
-    required: true,
+    default: 'active',
     enum: ['active', 'inactive']
   },
   startDate: Date,

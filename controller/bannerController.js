@@ -1,31 +1,37 @@
 const Banner = require('../models/bannerModel');
 const { cloudinary } = require('../config/cloudinary');
+const fs = require('fs');
 
-// Create a new banner
 exports.createBanner = async (req, res) => {
     try {
-        // Check if file was uploaded
-        // if (!req.file) {
-        //     return res.status(400).json({ message: 'Please upload an image' });
-        // }
-        const bannerData = {
-            ...req.body,
-            // imageUrl: req.file.path // Cloudinary URL
-        };
-
-        const banner = new Banner(bannerData);
-        const savedBanner = await banner.save();
-        res.status(201).json(savedBanner);
+      let imageUrl 
+  
+      // Nếu có file, upload lên Cloudinary
+      if (req.file) {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'banners',
+        });
+  
+        imageUrl = result.secure_url;
+        console.log('Uploaded image URL:', imageUrl);
+  
+      }
+  
+      const bannerData = {
+        ...req.body,
+        imageUrl,
+      };
+      
+  
+      const banner = new Banner(bannerData);
+      const savedBanner = await banner.save();
+  
+      res.status(201).json(savedBanner);
     } catch (error) {
-        // If there's an error, delete the uploaded image from Cloudinary
-        if (req.file) {
-            // Extract public_id from the Cloudinary URL
-            const publicId = req.file.path.split('/').slice(-1)[0].split('.')[0];
-            await cloudinary.uploader.destroy(publicId);
-        }
-        res.status(400).json({ message: error.message });
+      console.error('Error creating banner:', error);
+      res.status(500).json({ message: error.message });
     }
-};
+  };
 
 // Get all banners
 exports.getAllBanners = async (req, res) => {
@@ -63,9 +69,14 @@ exports.updateBanner = async (req, res) => {
             // Delete old image
             const oldImagePublicId = banner.imageUrl.split('/').pop().split('.')[0];
             await cloudinary.uploader.destroy(oldImagePublicId);
+
+            // Upload new image
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: 'banners',
+            });
             
             // Update with new image
-            banner.imageUrl = req.file.path;
+            banner.imageUrl = result.secure_url;
         }
 
         // Update other fields
