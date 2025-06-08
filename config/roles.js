@@ -6,7 +6,6 @@ const ROLES = {
     WAREHOUSE_STAFF: 1 << 3,
     CUSTOMER_SERVICE: 1 << 4,
     ADMIN_BUSINESS: 1 << 5,
-    // ADMIN_DEVELOPER: 1 << 6
 };
 
 const hasRole = (userRoles, requiredRole) => {
