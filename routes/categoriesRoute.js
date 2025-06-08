@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllCategoriesPopular, getParentCategories } = require('../controllers/categories');
+const { getAllCategoriesPopular, getParentCategories,   getChildCategories } = require('../controllers/categories');
 /**
  * @swagger
  * /categories/popular:
@@ -21,4 +21,5 @@ router.get('/popular', getAllCategoriesPopular);
  *         description: Thành công
  */
 router.get('/parent', getParentCategories);
+router.get('/childCategories', getChildCategories);
 module.exports = router;
