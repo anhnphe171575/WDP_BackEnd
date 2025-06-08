@@ -13,13 +13,14 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
-const userRoute = require('./routes/userRoute');
 
 const blogRoute = require('./routes/blogRoute');
 const productRoute = require('./routes/productRoute');
 const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
 const authRoute = require('./routes/authRoute');
+const userRoute = require('./routes/userRoute');
+
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 
 const app = express();
@@ -61,6 +62,8 @@ app.use('/api/banners', bannerRoute);
 app.use('/api/auth', authRoute);
 app.use('/api/products', productRoute);
 app.use('/api/categories', categoriesRoute);
+app.use('/api/user', userRoute);
+
 
 const PORT = 5000;
 server.listen(PORT, () => {
