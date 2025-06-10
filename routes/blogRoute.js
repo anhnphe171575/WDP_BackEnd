@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/cloudinary.js');
+const verifyToken = require('../middleware/auth.js');
 const { 
     createBlog, 
     getAllBlogs, 
@@ -14,6 +15,93 @@ const {
  * tags:
  *   name: Blogs
  *   description: Quản lý bài viết blog
+ */
+
+/**
+ * @swagger
+ * /api/blogs:
+ *   get:
+ *     summary: Lấy danh sách tất cả bài viết blog
+ *     tags: [Blogs]
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 blogs:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       title:
+ *                         type: string
+ *                       description:
+ *                         type: string
+ *                       tag:
+ *                         type: string
+ *                       images:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             url:
+ *                               type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ */
+
+/**
+ * @swagger
+ * /api/blogs/{id}:
+ *   get:
+ *     summary: Lấy thông tin bài viết blog theo ID
+ *     tags: [Blogs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của bài viết blog
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 blog:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     tag:
+ *                       type: string
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
  */
 
 /**
@@ -33,7 +121,11 @@ const {
  *             properties:
  *               title:
  *                 type: string
- *               content:
+ *                 required: true
+ *               description:
+ *                 type: string
+ *                 required: true
+ *               tag:
  *                 type: string
  *               images:
  *                 type: array
@@ -42,52 +134,52 @@ const {
  *                   format: binary
  *     responses:
  *       201:
- *         description: Tạo bài viết thành công
- */
-
-/**
- * @swagger
- * /api/blogs:
- *   get:
- *     summary: Lấy danh sách tất cả bài viết
- *     tags: [Blogs]
- *     responses:
- *       200:
- *         description: Thành công
- */
-
-/**
- * @swagger
- * /api/blogs/{id}:
- *   get:
- *     summary: Lấy thông tin bài viết theo ID
- *     tags: [Blogs]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: ID của bài viết
- *     responses:
- *       200:
- *         description: Thành công
- *       404:
- *         description: Không tìm thấy bài viết
+ *         description: Tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 blog:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     tag:
+ *                       type: string
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
  */
 
 /**
  * @swagger
  * /api/blogs/{id}:
  *   put:
- *     summary: Cập nhật bài viết theo ID
+ *     summary: Cập nhật bài viết blog theo ID
  *     tags: [Blogs]
+ *     consumes:
+ *       - multipart/form-data
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *         description: ID của bài viết blog
  *     requestBody:
  *       required: true
  *       content:
@@ -97,7 +189,11 @@ const {
  *             properties:
  *               title:
  *                 type: string
- *               content:
+ *                 required: true
+ *               description:
+ *                 type: string
+ *                 required: true
+ *               tag:
  *                 type: string
  *               images:
  *                 type: array
@@ -107,15 +203,41 @@ const {
  *     responses:
  *       200:
  *         description: Cập nhật thành công
- *       404:
- *         description: Không tìm thấy bài viết
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 blog:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     tag:
+ *                       type: string
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
  */
 
 /**
  * @swagger
  * /api/blogs/{id}:
  *   delete:
- *     summary: Xóa bài viết theo ID
+ *     summary: Xóa bài viết blog theo ID
  *     tags: [Blogs]
  *     parameters:
  *       - in: path
@@ -123,12 +245,21 @@ const {
  *         required: true
  *         schema:
  *           type: string
- *         description: ID của bài viết
+ *         description: ID của bài viết blog
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Xóa thành công
- *       404:
- *         description: Không tìm thấy bài viết
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
  */
 
 // Create blog - POST /api/blogs
@@ -144,7 +275,7 @@ router.get('/:id', getBlog);
 router.put('/:id', upload.array('images', 5), updateBlog);
 
 // Delete blog - DELETE /api/blogs/:id
-router.delete('/:id', deleteBlog);
+router.delete('/:id', verifyToken, deleteBlog);
 
 module.exports = router;
 
