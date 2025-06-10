@@ -3,7 +3,7 @@ const User = require('../models/userModel');
 // Get all users
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find().select('-password');
+        const users = await User.find({ role: { $ne: 0 } }).select('-password');
         res.status(200).json({
             success: true,
             data: users
