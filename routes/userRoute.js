@@ -24,6 +24,41 @@ router.get('/', userController.getAllUsers);
 
 /**
  * @swagger
+ * /api/users/orders:
+ *   get:
+ *     summary: Lấy tất cả đơn hàng của người dùng hiện tại
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/orders', verifyToken, userController.getAllOrders);
+
+/**
+ * @swagger
+ * /api/users/orders/{orderId}:
+ *   get:
+ *     summary: Lấy chi tiết đơn hàng của người dùng
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID đơn hàng
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/orders/:orderId', verifyToken, userController.getOrderDetails);
+
+/**
+ * @swagger
  * /api/users/{id}:
  *   get:
  *     summary: Lấy thông tin người dùng theo ID
@@ -115,40 +150,5 @@ router.put('/:id', userController.updateUser);
  *         description: Xóa thành công
  */
 router.delete('/:id', userController.deleteUser);
-
-/**
- * @swagger
- * /api/users/orders:
- *   get:
- *     summary: Lấy tất cả đơn hàng của người dùng hiện tại
- *     tags: [Users]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Thành công
- */
-router.get('/orders', verifyToken, userController.getAllOrders);
-
-/**
- * @swagger
- * /api/users/orders/{orderId}:
- *   get:
- *     summary: Lấy chi tiết đơn hàng của người dùng
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: orderId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID đơn hàng
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Thành công
- */
-router.get('/orders/:orderId', verifyToken, userController.getOrderDetails);
 
 module.exports = router;
