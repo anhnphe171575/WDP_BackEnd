@@ -56,7 +56,19 @@ router.get('/orders', verifyToken, userController.getAllOrders);
  *         description: Thành công
  */
 router.get('/orders/:orderId', verifyToken, userController.getOrderDetails);
-
+/**
+ * @swagger
+ * /api/users/addresses:
+ *   get:
+ *     summary: Lấy tất cả địa chỉ của người dùng hiện tại
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/addresses', verifyToken, userController.getUserAddresses)
 /**
  * @swagger
  * /api/users/{id}:
@@ -74,7 +86,11 @@ router.get('/orders/:orderId', verifyToken, userController.getOrderDetails);
  *       200:
  *         description: Thành công
  */
-router.get('/:id', userController.getUserById);
+router.post('/addresses', verifyToken, userController.addAddress);
+
+router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress);
+
+router.get('/:id',verifyToken, userController.getUserById);
 
 /**
  * @swagger
@@ -99,7 +115,7 @@ router.get('/:id', userController.getUserById);
  *       201:
  *         description: Tạo thành công
  */
-router.post('/', userController.createUser);
+router.post('/:id', userController.createUser);
 
 /**
  * @swagger
@@ -150,5 +166,6 @@ router.put('/:id', userController.updateUser);
  *         description: Xóa thành công
  */
 router.delete('/:id', userController.deleteUser);
+
 
 module.exports = router;

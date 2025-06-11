@@ -1,17 +1,21 @@
 const Cart = require('../models/cart');
 const CartItem = require('../models/cartItem');
 const Product = require('../models/product');
+const ProductVariant = require('../models/productVariant');
+const ImportBatch = require('../models/import_batches');
+const mongoose = require('mongoose');
 
 const addToCart = async (req, res) => {
     try {
         const userId = req.user.id;
-        const {  productId, quantity } = req.body;
+        const { productId, productVariantId, quantity } = req.body;
+        console.log(req.body);
 
         // Validate input
-        if (!userId || !productId || !quantity) {
+        if (!userId || !productId || !productVariantId || !quantity) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: userId, productId, quantity'
+                message: 'Missing required fields: userId, productId, productVariantId, quantity'
             });
         }
 
@@ -24,26 +28,40 @@ const addToCart = async (req, res) => {
             });
         }
 
+        // Check if product variant exists
+        const productVariant = await ProductVariant.findOne({
+            _id: productVariantId,
+            product_id: productId
+        });
+        if (!productVariant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product variant not found'
+            });
+        }
+
         // Find or create cart for user
         let cart = await Cart.findOne({ userId });
         if (!cart) {
             cart = new Cart({ userId, cartItems: [] });
         }
 
-        // Check if product already exists in cart
+        // Check if product variant already exists in cart
         const existingCartItem = await CartItem.findOne({
             productId: productId,
+            productVariantId: productVariantId,
             _id: { $in: cart.cartItems.map(item => item.cartItem_id) }
         });
 
         if (existingCartItem) {
-            // Update quantity if product already in cart
+            // Update quantity if product variant already in cart
             existingCartItem.quantity += quantity;
             await existingCartItem.save();
         } else {
             // Create new cart item
             const newCartItem = new CartItem({
                 productId,
+                productVariantId,
                 quantity
             });
             await newCartItem.save();
@@ -54,14 +72,20 @@ const addToCart = async (req, res) => {
 
         await cart.save();
 
-        // Populate cart items with product details
+        // Populate cart items with product and variant details
         const populatedCart = await Cart.findById(cart._id)
             .populate({
                 path: 'cartItems.cartItem_id',
-                populate: {
-                    path: 'productId',
-                    model: 'Product'
-                }
+                populate: [
+                    {
+                        path: 'productId',
+                        model: 'Product'
+                    },
+                    {
+                        path: 'productVariantId',
+                        model: 'ProductVariant'
+                    }
+                ]
             });
 
         return res.status(200).json({
@@ -176,15 +200,23 @@ const getCart = async (req, res) => {
         const cart = await Cart.findOne({ userId })
             .populate({
                 path: 'cartItems.cartItem_id',
-                populate: {
-                    path: 'productId',
-                    model: 'Product',
-                    populate: {
-                        path: 'variants',
+                populate: [
+                    {
+                        path: 'productId',
+                        model: 'Product',
+                        select: 'name description price images variants'
+                    },
+                    {
+                        path: 'productVariantId',
                         model: 'ProductVariant',
-                        select: 'images sellPrice'
+                        select: 'sku price stock attributes images sellPrice',
+                        populate: {
+                            path: 'attribute',
+                            model: 'Attribute',
+                            select: 'value description'
+                        }
                     }
-                }
+                ]
             });
 
         if (!cart) {
@@ -194,17 +226,85 @@ const getCart = async (req, res) => {
             });
         }
 
-        // Transform the cart data to include variant information
-        const transformedCart = {
-            ...cart.toObject(),
-            cartItems: cart.cartItems.map(item => ({
-                ...item.cartItem_id.toObject(),
-                product: {
-                    ...item.cartItem_id.productId.toObject(),
-                    variant: item.cartItem_id.productId.variants[0] // Get the first variant
+        // Get import batches for all variants in cart
+        const variantIds = cart.cartItems.map(item => item.cartItem_id.productVariantId._id);
+        const importBatches = await ImportBatch.aggregate([
+            {
+                $match: {
+                    variantId: { $in: variantIds }
                 }
-            }))
+            },
+            {
+                $group: {
+                    _id: '$variantId',
+                    totalQuantity: { $sum: '$quantity' },
+                    batches: {
+                        $push: {
+                            quantity: '$quantity',
+                            importDate: '$importDate',
+                            costPrice: '$costPrice'
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Create a map of variant ID to import batch data
+        const importBatchMap = importBatches.reduce((map, batch) => {
+            map[batch._id.toString()] = {
+                totalQuantity: batch.totalQuantity,
+                batches: batch.batches
+            };
+            return map;
+        }, {});
+
+        // Transform the cart data to a more organized structure
+        const transformedCart = {
+            _id: cart._id,
+            userId: cart.userId,
+            createdAt: cart.createdAt,
+            updatedAt: cart.updatedAt,
+            cartItems: cart.cartItems.map(item => {
+                const cartItem = item.cartItem_id;
+                const variantId = cartItem.productVariantId._id.toString();
+                const importBatchData = importBatchMap[variantId] || { totalQuantity: 0, batches: [] };
+
+                return {
+                    _id: cartItem._id,
+                    quantity: cartItem.quantity,
+                    product: {
+                        _id: cartItem.productId._id,
+                        name: cartItem.productId.name,
+                        description: cartItem.productId.description,
+                        price: cartItem.productId.price,
+                        images: cartItem.productId.images,
+                        selectedVariant: {
+                            _id: cartItem.productVariantId._id,
+                            sku: cartItem.productVariantId.sku,
+                            price: cartItem.productVariantId.sellPrice,
+                            stock: cartItem.productVariantId.stock,
+                            images: cartItem.productVariantId.images,
+                            totalImportQuantity: importBatchData.totalQuantity,
+                            importBatches: importBatchData.batches,
+                            attributes: cartItem.productVariantId.attribute.map(attr => ({
+                                value: attr.value,
+                                description: attr.description
+                            }))
+                        },
+                        variants: cartItem.productId.variants
+                    }
+                };
+            })
         };
+
+        // Calculate total items and total price
+        const totals = transformedCart.cartItems.reduce((acc, item) => {
+            acc.totalItems += item.quantity;
+            acc.totalPrice += (item.product.selectedVariant.price * item.quantity);
+            return acc;
+        }, { totalItems: 0, totalPrice: 0 });
+
+        transformedCart.summary = totals;
 
         return res.status(200).json({
             success: true,
