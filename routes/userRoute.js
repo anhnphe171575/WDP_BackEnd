@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const verifyToken = require('../middleware/auth');
 
 /**
  * @swagger
@@ -19,6 +20,42 @@ const userController = require('../controllers/userController');
  *       200:
  *         description: Thành công
  */
+router.get('/', userController.getAllUsers);
+
+/**
+ * @swagger
+ * /api/users/orders:
+ *   get:
+ *     summary: Lấy tất cả đơn hàng của người dùng hiện tại
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/orders', verifyToken, userController.getAllOrders);
+
+/**
+ * @swagger
+ * /api/users/orders/{orderId}:
+ *   get:
+ *     summary: Lấy chi tiết đơn hàng của người dùng
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID đơn hàng
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/orders/:orderId', verifyToken, userController.getOrderDetails);
 
 /**
  * @swagger
@@ -37,6 +74,7 @@ const userController = require('../controllers/userController');
  *       200:
  *         description: Thành công
  */
+router.get('/:id', userController.getUserById);
 
 /**
  * @swagger
@@ -61,6 +99,7 @@ const userController = require('../controllers/userController');
  *       201:
  *         description: Tạo thành công
  */
+router.post('/', userController.createUser);
 
 /**
  * @swagger
@@ -91,6 +130,7 @@ const userController = require('../controllers/userController');
  *       200:
  *         description: Cập nhật thành công
  */
+router.put('/:id', userController.updateUser);
 
 /**
  * @swagger
@@ -109,11 +149,6 @@ const userController = require('../controllers/userController');
  *       200:
  *         description: Xóa thành công
  */
-
-router.get('/', userController.getAllUsers);
-router.get('/:id', userController.getUserById);
-router.post('/', userController.createUser);
-router.put('/:id', userController.updateUser);
 router.delete('/:id', userController.deleteUser);
 
-module.exports= router;
+module.exports = router;

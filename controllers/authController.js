@@ -9,163 +9,163 @@ const cookieParser = require('cookie-parser');
 const transporter = require('../config/email');
 
 const client = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    'postmessage' // This is required for the token exchange
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  'postmessage' // This is required for the token exchange
 );
 
 exports.login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-        // Validate input
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Vui lòng nhập email và mật khẩu'
-            });
-        }
-
-        // Find user by email
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Email hoặc mật khẩu không đúng'
-            });
-        }
-
-        // Compare password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Email hoặc mật khẩu không đúng'
-            });
-        }
-
-        // Create JWT token
-        const token = jwt.sign(
-            { 
-                id: user._id,
-                email: user.email,
-                role: user.role
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        // Send response
-        res.status(200).json({
-            success: true,
-            message: 'Đăng nhập thành công',
-            token,
-            user: {
-                id: user._id,
-                email: user.email,
-                role: user.role
-            }
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server',
-            error: error.message
-        });
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập email và mật khẩu'
+      });
     }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Email hoặc mật khẩu không đúng'
+      });
+    }
+
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Email hoặc mật khẩu không đúng'
+      });
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      message: 'Đăng nhập thành công',
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
 };
 
 exports.register = async (req, res) => {
-    try {
-        const { name, email, password, phone} = req.body;
+  try {
+    const { name, email, password, phone } = req.body;
 
-        // Validate required fields
-        if (!name || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Vui lòng nhập đầy đủ thông tin bắt buộc'
-            });
-        }
-
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email đã được sử dụng'
-            });
-        }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Generate verification token
-        const verificationToken = jwt.sign(
-            { email },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        // Create new user
-        const newUser = new User({
-            name,
-            email,
-            password: hashedPassword,
-            phone,
-            role: 1, // Default role for normal user
-            verified: false,
-            verificationToken,
-            verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-        });
-
-        // Save user to database
-        await newUser.save();
-
-        // Send verification email
-        const emailSent = await sendVerificationEmail(email, verificationToken);
-        if (!emailSent) {
-            // If email sending fails, delete the user
-            await User.findByIdAndDelete(newUser._id);
-            return res.status(500).json({
-                success: false,
-                message: 'Lỗi khi gửi email xác thực'
-            });
-        }
-
-        // Send response
-        res.status(201).json({
-            success: true,
-            message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
-            user: {
-                id: newUser._id,
-                name: newUser.name,
-                email: newUser.email,
-                role: newUser.role
-            }
-        });
-
-    } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi server',
-            error: error.message
-        });
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập đầy đủ thông tin bắt buộc'
+      });
     }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email đã được sử dụng'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Generate verification token
+    const verificationToken = jwt.sign(
+      { email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Create new user
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      phone,
+      role: 1, // Default role for normal user
+      verified: false,
+      verificationToken,
+      verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+
+    // Save user to database
+    await newUser.save();
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email, verificationToken);
+    if (!emailSent) {
+      // If email sending fails, delete the user
+      await User.findByIdAndDelete(newUser._id);
+      return res.status(500).json({
+        success: false,
+        message: 'Lỗi khi gửi email xác thực'
+      });
+    }
+
+    // Send response
+    res.status(201).json({
+      success: true,
+      message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
 };
 
 const sendVerificationEmail = async (email, verificationToken) => {
-    // Tạo URL xác thực với đầy đủ thông tin
-    const verificationUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/auth/verify-email?token=${verificationToken}`;
-  
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Verify your email',
-      html: `
+  // Tạo URL xác thực với đầy đủ thông tin
+  const verificationUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/auth/verify-email?token=${verificationToken}`;
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: 'Verify your email',
+    html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">Hello!</h1>
           <p style="color: #666; line-height: 1.6;">Thank you for registering. Please click the button below to verify your email:</p>
@@ -179,87 +179,87 @@ const sendVerificationEmail = async (email, verificationToken) => {
           <p style="color: #666; line-height: 1.6;">If you did not request this verification, please ignore this email.</p>
         </div>
       `
-    };
-  
-    try {
-      await transporter.sendMail(mailOptions);
-      return true;
-    } catch (error) {
-      console.error('Error sending verification email:', error);
-      return false;
-    }
   };
 
-  exports.VerifyEmail = async (req, res) => {
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    return false;
+  }
+};
+
+exports.VerifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification token'
+      });
+    }
+
+    // Tìm user có token tương ứng
+    const user = await User.findOne({ verificationToken: token });
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification token or already used'
+      });
+    }
+
+    // Kiểm tra token đã hết hạn chưa
+    if (user.verificationTokenExpires < new Date()) {
+      // Xóa token đã hết hạn
+      await User.findByIdAndUpdate(user._id, {
+        $unset: {
+          verificationToken: "",
+          verificationTokenExpires: ""
+        }
+      });
+
+      return res.status(400).json({
+        success: false,
+        message: 'Verification token has expired. Please register again.'
+      });
+    }
+
     try {
-      const { token } = req.query;
-  
-      if (!token) {
+      // Verify token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Kiểm tra email trong token có khớp với email của user không
+      if (decoded.email !== user.email) {
         return res.status(400).json({
           success: false,
           message: 'Invalid verification token'
         });
       }
-  
-      // Tìm user có token tương ứng
-      const user = await User.findOne({ verificationToken: token });
-      if (!user) {
+
+      // Kiểm tra tài khoản đã được xác thực chưa
+      if (user.verified) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid verification token or already used'
+          message: 'Account is already verified'
         });
       }
-  
-      // Kiểm tra token đã hết hạn chưa
-      if (user.verificationTokenExpires < new Date()) {
-        // Xóa token đã hết hạn
-        await User.findByIdAndUpdate(user._id, {
-          $unset: {
-            verificationToken: "",
-            verificationTokenExpires: ""
-          }
-        });
-  
-        return res.status(400).json({
-          success: false,
-          message: 'Verification token has expired. Please register again.'
-        });
-      }
-  
-      try {
-        // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  
-        // Kiểm tra email trong token có khớp với email của user không
-        if (decoded.email !== user.email) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid verification token'
-          });
+
+      // Cập nhật trạng thái user và xóa các trường xác thực
+      await User.findByIdAndUpdate(user._id, {
+        $set: {
+          // active: true,
+          verified: true
+        },
+        $unset: {
+          verificationToken: "",
+          verificationTokenExpires: ""
         }
-  
-        // Kiểm tra tài khoản đã được xác thực chưa
-        if (user.verified) {
-          return res.status(400).json({
-            success: false,
-            message: 'Account is already verified'
-          });
-        }
-  
-        // Cập nhật trạng thái user và xóa các trường xác thực
-        await User.findByIdAndUpdate(user._id, {
-          $set: {
-            // active: true,
-            verified: true
-          },
-          $unset: {
-            verificationToken: "",
-            verificationTokenExpires: ""
-          }
-        });
-  
-        // Trả về trang HTML thông báo thành công
-        res.status(200).send(`
+      });
+
+      // Trả về trang HTML thông báo thành công
+      res.status(200).send(`
           <!DOCTYPE html>
           <html>
             <head>
@@ -314,108 +314,108 @@ const sendVerificationEmail = async (email, verificationToken) => {
             </body>
           </html>
         `);
-  
-      } catch (error) {
-        // Nếu token hết hạn, xóa token khỏi user
-        if (error.name === 'TokenExpiredError') {
-          await User.findByIdAndUpdate(user._id, {
-            $unset: {
-              verificationToken: "",
-              verificationTokenExpires: ""
-            }
-          });
-        }
-  
-        return res.status(400).json({
-          success: false,
-          message: 'Verification token has expired'
+
+    } catch (error) {
+      // Nếu token hết hạn, xóa token khỏi user
+      if (error.name === 'TokenExpiredError') {
+        await User.findByIdAndUpdate(user._id, {
+          $unset: {
+            verificationToken: "",
+            verificationTokenExpires: ""
+          }
         });
       }
-  
-    } catch (error) {
-      console.error('Verify email error:', error);
-      res.status(500).json({
+
+      return res.status(400).json({
         success: false,
-        message: 'Server error'
+        message: 'Verification token has expired'
       });
     }
-  };
+
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
 
 exports.googleAuth = async (req, res) => {
-    try {
-        const { credential } = req.body;
-        
-        // Verify Google token
-        const ticket = await client.verifyIdToken({
-            idToken: credential,
-            audience: process.env.GOOGLE_CLIENT_ID
-        });
-        
-        const payload = ticket.getPayload();
-        const { email, name, picture, sub: googleId } = payload;
+  try {
+    const { credential } = req.body;
 
-        // Check if user exists
-        let user = await User.findOne({ 
-            $or: [
-                { email },
-                { googleId }
-            ]
-        });
+    // Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
 
-        if (!user) {
-            // Create new user if doesn't exist
-            user = new User({
-                name,
-                email,
-                password: Math.random().toString(36).slice(-8), // Random password
-                role: 1, // Default role for normal user
-                verified: true, // Google accounts are pre-verified
-                avatar: picture,
-                googleId // Store Google ID for future reference
-            });
-            await user.save();
-        } else if (!user.googleId) {
-            // If user exists but doesn't have googleId, update it
-            user.googleId = googleId;
-            if (!user.avatar) {
-                user.avatar = picture;
-            }
-            await user.save();
-        }
+    const payload = ticket.getPayload();
+    const { email, name, picture, sub: googleId } = payload;
 
-        // Create JWT token
-        const token = jwt.sign(
-            { 
-                id: user._id,
-                email: user.email,
-                role: user.role
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+    // Check if user exists
+    let user = await User.findOne({
+      $or: [
+        { email },
+        { googleId }
+      ]
+    });
 
-        // Send response
-        res.status(200).json({
-            success: true,
-            message: 'Đăng nhập thành công',
-            token,
-            user: {
-                id: user._id,
-                email: user.email,
-                name: user.name,
-                role: user.role,
-                avatar: user.avatar
-            }
-        });
-
-    } catch (error) {
-        console.error('Google auth error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi xác thực Google',
-            error: error.message
-        });
+    if (!user) {
+      // Create new user if doesn't exist
+      user = new User({
+        name,
+        email,
+        password: Math.random().toString(36).slice(-8), // Random password
+        role: 1, // Default role for normal user
+        verified: true, // Google accounts are pre-verified
+        avatar: picture,
+        googleId // Store Google ID for future reference
+      });
+      await user.save();
+    } else if (!user.googleId) {
+      // If user exists but doesn't have googleId, update it
+      user.googleId = googleId;
+      if (!user.avatar) {
+        user.avatar = picture;
+      }
+      await user.save();
     }
+
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      message: 'Đăng nhập thành công',
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar
+      }
+    });
+
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi xác thực Google',
+      error: error.message
+    });
+  }
 };
 
 
@@ -606,3 +606,39 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+exports.UserProfile = async(req,res) =>{
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId).select('-password -verificationToken -verificationTokenExpires');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy thông tin người dùng'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Lấy thông tin profile thành công',
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                avatar: user.avatar,
+                verified: user.verified,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy thông tin profile:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server',
+            error: error.message
+        });
+    }
+}
