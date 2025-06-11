@@ -12,12 +12,113 @@ exports.getAllOrders = async (req, res) => {
         const userId = req.user.id;
 
         const orders = await Order.find({ userId })
-            .select('_id total status paymentMethod createAt')
-            .sort({ createAt: -1 });
+            .select('_id total status paymentMethod createAt OrderItems voucher')
+            .sort({ createAt: -1 })
+            .lean();
+
+        // Lấy tất cả OrderItems
+        const orderItemIds = orders.reduce((ids, order) => {
+            return [...ids, ...order.OrderItems.filter(id => id)];
+        }, []);
+
+        const orderItems = await OrderItem.find({
+            _id: { $in: orderItemIds }
+        }).lean();
+
+        // Lấy tất cả productIds
+        const productIds = orderItems
+            .filter(item => item && item.productId)
+            .map(item => item.productId);
+
+        // Lấy tất cả voucherIds
+        const voucherIds = orders.reduce((ids, order) => {
+            return [...ids, ...(order.voucher || [])];
+        }, []);
+
+        // Lấy thông tin sản phẩm
+        const products = await Product.find({
+            _id: { $in: productIds }
+        }).select('name').lean();
+
+        // Lấy thông tin voucher
+        const vouchers = await Voucher.find({
+            _id: { $in: voucherIds }
+        }).lean();
+
+        // Tạo maps để truy xuất nhanh
+        const productMap = products.reduce((map, product) => {
+            map[product._id.toString()] = product;
+            return map;
+        }, {});
+
+        const orderItemMap = orderItems.reduce((map, item) => {
+            map[item._id.toString()] = item;
+            return map;
+        }, {});
+
+        const voucherMap = vouchers.reduce((map, voucher) => {
+            map[voucher._id.toString()] = voucher;
+            return map;
+        }, {});
+
+        // Format lại dữ liệu orders
+        const formattedOrders = orders.map(order => {
+            const orderItems = order.OrderItems.map(orderItemId => {
+                const orderItem = orderItemMap[orderItemId.toString()];
+                if (orderItem) {
+                    const product = productMap[orderItem.productId?.toString()];
+                    return {
+                        productName: product ? product.name : 'Sản phẩm không tìm thấy',
+                        quantity: orderItem.quantity || 0,
+                        price: orderItem.price || 0
+                    };
+                }
+                return null;
+            }).filter(item => item);
+
+            // Format thông tin voucher và tính toán giá sau khi trừ voucher
+            const orderVouchers = (order.voucher || []).map(voucherId => {
+                const voucher = voucherMap[voucherId.toString()];
+                return voucher ? {
+                    _id: voucher._id,
+                    code: voucher.code,
+                    discountAmount: voucher.discountAmount || 0,
+                    discountPercent: voucher.discountPercent || 0,
+                    validFrom: voucher.validFrom,
+                    validTo: voucher.validTo
+                } : null;
+            }).filter(voucher => voucher);
+
+            // Tính tổng giá trị voucher
+            const totalVoucherDiscount = orderVouchers.reduce((total, voucher) => {
+                if (voucher.discountAmount) {
+                    return total + voucher.discountAmount;
+                }
+                if (voucher.discountPercent) {
+                    return total + (order.total * voucher.discountPercent / 100);
+                }
+                return total;
+            }, 0);
+
+            // Tính giá sau khi trừ voucher
+            const finalTotal = Math.max(0, order.total - totalVoucherDiscount);
+
+            return {
+                _id: order._id,
+                total: order.total,
+                finalTotal: finalTotal,
+                voucherDiscount: totalVoucherDiscount,
+                status: order.status,
+                paymentMethod: order.paymentMethod,
+                createAt: order.createAt,
+                items: orderItems,
+                vouchers: orderVouchers
+            };
+        });
 
         res.status(200).json({
             success: true,
-            data: orders
+            data: formattedOrders
         });
     } catch (error) {
         res.status(500).json({
@@ -84,28 +185,25 @@ exports.getOrderDetails = async (req, res) => {
         // OrderItems là array các ObjectId trực tiếp, không phải object có orderItem_id
         const orderItemIds = order.OrderItems.filter(id => id); // Lọc bỏ null/undefined
 
-        console.log('OrderItem IDs to find:', orderItemIds);
-
         // Tìm tất cả OrderItems
         const orderItems = await OrderItem.find({
             _id: { $in: orderItemIds }
         }).lean();
-        
-        console.log('OrderItems found:', orderItems);
         
         // Lấy danh sách productId
         const productIds = orderItems
             .filter(item => item && item.productId)
             .map(item => item.productId);
             
-        console.log('Product IDs to find:', productIds);
-            
+        // Lấy thông tin voucher
+        const vouchers = await Voucher.find({
+            _id: { $in: order.voucher || [] }
+        }).lean();
+        
         // Tìm tất cả products
         const products = await Product.find({
             _id: { $in: productIds }
         }).lean();
-        
-        console.log('Products found:', products);
         
         // Tạo product map
         const productMap = products.reduce((map, product) => {
@@ -123,9 +221,36 @@ exports.getOrderDetails = async (req, res) => {
             return map;
         }, {});
 
+        // Format thông tin voucher
+        const orderVouchers = vouchers.map(voucher => ({
+            _id: voucher._id,
+            code: voucher.code,
+            discountAmount: voucher.discountAmount || 0,
+            discountPercent: voucher.discountPercent || 0,
+            validFrom: voucher.validFrom,
+            validTo: voucher.validTo
+        }));
+
+        // Tính tổng giá trị voucher
+        const totalVoucherDiscount = orderVouchers.reduce((total, voucher) => {
+            if (voucher.discountAmount) {
+                return total + voucher.discountAmount;
+            }
+            if (voucher.discountPercent) {
+                return total + (order.total * voucher.discountPercent / 100);
+            }
+            return total;
+        }, 0);
+
+        // Tính giá sau khi trừ voucher
+        const finalTotal = Math.max(0, order.total - totalVoucherDiscount);
+
         // Format lại dữ liệu
         const formattedOrder = {
             ...order,
+            finalTotal: finalTotal,
+            voucherDiscount: totalVoucherDiscount,
+            vouchers: orderVouchers,
             OrderItems: order.OrderItems.map(orderItemId => {
                 // orderItemId là ObjectId trực tiếp
                 const orderItem = orderItemMap[orderItemId.toString()];
