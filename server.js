@@ -17,7 +17,7 @@ const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
 const authRoute = require('./routes/authRoute');
 const userRoute = require('./routes/userRoute'); // ✅ Đã giữ lại dòng này
-
+const cartRoute = require('./routes/cartRoute');
 const { setupSocket } = require('./config/socket.io');
 
 const app = express();
@@ -59,6 +59,7 @@ app.use('/api/auth', authRoute);
 app.use('/api/products', productRoute);
 app.use('/api/categories', categoriesRoute);
 app.use('/api/users', userRoute); 
+app.use('/api/cart', cartRoute);
 
 const PORT = 5000;
 server.listen(PORT, () => {
