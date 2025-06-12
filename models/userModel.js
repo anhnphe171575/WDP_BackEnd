@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   phone: { type: String },
   dob: { type: Date }, 
-  role: { type: Number, default: 0 }, 
+  role: { type: Number, default: 1 }, 
   verified: { type: Boolean, default: false },
   verificationToken: {
     type: String,

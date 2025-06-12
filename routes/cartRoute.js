@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { addToCart,  getCart, updateCart, deleteCartItem } = require('../controllers/cartController');   
+const { addToCart,  getCart, updateCart, deleteCartItem, getLatestCartItem } = require('../controllers/cartController');   
 const verifyToken = require('../middleware/auth');
 /**
  * @swagger
@@ -64,4 +64,15 @@ router.put('/updatecart', verifyToken, updateCart);
  */
 router.delete('/deletecartitem/:cartItemId', verifyToken, deleteCartItem);
 
+/**
+ * @swagger 
+ * /api/cart/getlatestcartitem:
+ *   get:
+ *     summary: Lấy sản phẩm mới nhất trong giỏ hàng
+ *     tags: [Cart]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ */
+router.get('/getlatestcartitem', verifyToken, getLatestCartItem);
 module.exports = router;
