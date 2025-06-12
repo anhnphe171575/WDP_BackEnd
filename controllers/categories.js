@@ -2,6 +2,7 @@ const Category = require('../models/category');
 const Order = require('../models/order');
 const OrderItem = require('../models/orderItem');
 const Product = require('../models/product');
+const Attribute = require('../models/attribute');
 
 const getAllCategoriesPopular = async (req, res) => {
     try {
@@ -104,7 +105,151 @@ const getParentCategories = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Hàm đệ quy để lấy tất cả categories con
+const getAllChildCategories = async (parentId, currentDepth = 1) => {
+    // Stop recursion if we've reached depth 3
+    if (currentDepth >= 3) {
+        return [];
+    }
+
+    const children = await Category.find({
+        parentCategory: parentId
+    }).select('_id name description image');
+
+    const result = [];
+    for (const child of children) {
+        const grandChildren = await getAllChildCategories(child._id, currentDepth + 1);
+        result.push({
+            ...child.toObject(),
+            children: grandChildren
+        });
+    }
+    return result;
+};
+
+const getChildCategories = async (req, res) => {
+    try {
+        // Lấy tất cả categories cha (parentCategory: null)
+        const parentCategories = await Category.find({ 
+            parentCategory: null 
+        }).select('_id name description image');
+
+        // Tạo một mảng để lưu kết quả cuối cùng
+        const result = [];
+
+        // Với mỗi category cha, tìm tất cả categories con và cháu
+        for (const parent of parentCategories) {
+            const allChildren = await getAllChildCategories(parent._id);
+
+            // Thêm category cha và tất cả categories con vào kết quả
+            result.push({
+                parent: {
+                    _id: parent._id,
+                    name: parent.name,
+                    description: parent.description,
+                    image: parent.image
+                },
+                children: allChildren
+            });
+        }
+
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getCategoryChildrenById = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        
+        // Verify if category exists
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+
+        // Get only direct child categories (one level)
+        const childCategories = await Category.find({
+            parentCategory: categoryId
+        }).select('_id name description image');
+
+        res.status(200).json({
+            success: true,
+            parent: {
+                _id: category._id,
+                name: category.name,
+                description: category.description,
+                image: category.image
+            },
+            children: childCategories
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Hàm đệ quy để lấy tất cả attribute con
+const getAllChildAttributes = async (parentId) => {
+    const children = await Attribute.find({
+        parentId: parentId
+    }).select('_id value description parentId');
+
+    const result = [];
+    for (const child of children) {
+        const grandChildren = await getAllChildAttributes(child._id);
+        result.push({
+            ...child.toObject(),
+            children: grandChildren
+        });
+    }
+    return result;
+};
+
+const getAttributesByCategoryId = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        
+        // Verify if category exists
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+
+        // Get parent attributes associated with this category (those without parentId)
+        const parentAttributes = await Attribute.find({
+            categories: categoryId,
+            parentId: null
+        }).select('_id value description parentId');
+
+        // Get all child attributes for each parent attribute
+        const attributesWithChildren = [];
+        for (const attr of parentAttributes) {
+            const children = await getAllChildAttributes(attr._id);
+            attributesWithChildren.push({
+                ...attr.toObject(),
+                children: children
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            category: {
+                _id: category._id,
+                name: category.name
+            },
+            attributes: attributesWithChildren
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     getAllCategoriesPopular,
     getParentCategories,
+    getChildCategories,
+    getCategoryChildrenById,
+    getAttributesByCategoryId
 };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllCategoriesPopular, getParentCategories } = require('../controllers/categories');
+const { getAllCategoriesPopular, getParentCategories,   getChildCategories, getCategoryChildrenById, getAttributesByCategoryId } = require('../controllers/categories');
 /**
  * @swagger
  * /categories/popular:
@@ -21,4 +21,36 @@ router.get('/popular', getAllCategoriesPopular);
  *         description: Thành công
  */
 router.get('/parent', getParentCategories);
+
+/**
+ * @swagger
+ * /categories/childCategories:
+ *   get:
+ *     summary: Lấy danh sách categories con
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/childCategories', getChildCategories);
+
+/**
+ * @swagger
+ * /categories/childCategories/{categoryId}:
+ *   get:
+ *     summary: Lấy danh sách categories con
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/childCategories/:categoryId', getCategoryChildrenById);
+/**
+ * @swagger
+ * /categories/attributes/{categoryId}:
+ *   get:
+ *     summary: Lấy danh sách attributes
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/attributes/:categoryId', getAttributesByCategoryId);
 module.exports = router;
