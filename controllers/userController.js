@@ -4,6 +4,7 @@ const OrderItem = require('../models/orderItem');
 const User = require('../models/userModel');
 const Voucher = require('../models/voucher'); 
 const Product = require('../models/product')
+const ProductVariant = require('../models/productVariant')
 
 
 // Get all orders of user
@@ -190,10 +191,13 @@ exports.getOrderDetails = async (req, res) => {
             _id: { $in: orderItemIds }
         }).lean();
         
-        // Lấy danh sách productId
-        const productIds = orderItems
-            .filter(item => item && item.productId)
-            .map(item => item.productId);
+        // Lấy danh sách productId và productVariantId
+        const productIds = [];
+        const productVariantIds = [];
+        orderItems.forEach(item => {
+            if (item.productId) productIds.push(item.productId);
+            if (item.productVariant) productVariantIds.push(item.productVariant);
+        });
             
         // Lấy thông tin voucher
         const vouchers = await Voucher.find({
@@ -204,11 +208,24 @@ exports.getOrderDetails = async (req, res) => {
         const products = await Product.find({
             _id: { $in: productIds }
         }).lean();
+
+        // Tìm tất cả product variants
+        const productVariants = await ProductVariant.find({
+            _id: { $in: productVariantIds }
+        }).populate('attribute').lean();
         
         // Tạo product map
         const productMap = products.reduce((map, product) => {
             if (product && product._id) {
                 map[product._id.toString()] = product;
+            }
+            return map;
+        }, {});
+
+        // Tạo product variant map
+        const productVariantMap = productVariants.reduce((map, variant) => {
+            if (variant && variant._id) {
+                map[variant._id.toString()] = variant;
             }
             return map;
         }, {});
@@ -260,12 +277,21 @@ exports.getOrderDetails = async (req, res) => {
                     const product = productMap[orderItem.productId?.toString()];
                     const productName = product ? product.name : 'Sản phẩm không tìm thấy';
 
+                    // Lấy product variant
+                    const productVariant = productVariantMap[orderItem.productVariant?.toString()];
+                    const variantInfo = productVariant ? {
+                        images: productVariant.images || [],
+                        attributes: productVariant.attribute || [],
+                        sellPrice: productVariant.sellPrice || 0
+                    } : null;
+
                     return {
                         _id: orderItem._id,
                         product: {
                             name: productName,
                             id: orderItem.productId
                         },
+                        variant: variantInfo,
                         quantity: orderItem.quantity || 0,
                         price: orderItem.price || 0,
                         totalPrice: (orderItem.price || 0) * (orderItem.quantity || 0)
