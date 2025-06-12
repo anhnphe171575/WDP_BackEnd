@@ -16,12 +16,13 @@ const productRoute = require('./routes/productRoute');
 const categoriesRoute = require('./routes/categoriesRoute');
 const bannerRoute = require('./routes/bannerRoute');
 const authRoute = require('./routes/authRoute');
+const userRoute = require('./routes/userRoute'); 
+const voucherRoute = require('./routes/voucherRoute');
 const orderRoute = require('./routes/orderRoute')
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 const userRoute = require('./routes/userRoute'); // ✅ Đã giữ lại dòng này
 const cartRoute = require('./routes/cartRoute');
 const reviewRoute = require('./routes/reviewRoute');
-
 
 
 const app = express();
@@ -67,6 +68,8 @@ app.use('/api/banners', bannerRoute);
 app.use('/api/auth', authRoute);
 app.use('/api/products', productRoute);
 app.use('/api/categories', categoriesRoute);
+app.use('/api/users', userRoute); 
+app.use('/api/vouchers', voucherRoute);
 app.use('/api/users', userRoute);
 app.use('/api/orders',orderRoute)
 app.use('/api/cart', cartRoute);
