@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const Order = require('../models/order');
 const OrderItem = require('../models/orderItem');
 const User = require('../models/userModel');
+const { Server } = require('socket.io');
+const Notification = require('../models/notificationModel');
+
 const Voucher = require('../models/voucher'); 
 const Product = require('../models/product')
 
@@ -300,6 +303,30 @@ exports.getOrderDetails = async (req, res) => {
 exports.createUser = async (req, res) => {
     try {
         const user = await User.create(req.body);
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'User creation failed'
+            });
+        }
+        user.save();
+        // 1. Gửi socket đến tất cả client
+        req.io.emit('notification', {
+            message: `User ${user.name} has registered successfully!`
+        });
+
+        // 2. Lưu vào DB
+        const notification = new Notification({
+            message: `User ${user.name} has registered successfully!`,
+            userId: user._id,
+            type: 'user_registration',
+            title: 'New User Registration',
+            description: `User ${user.name} has registered successfully!`,
+            read: false
+        });
+
+        await notification.save();
+        // Save the user to the database
         res.status(201).json({
             success: true,
             data: user
