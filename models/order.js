@@ -9,10 +9,9 @@ const OrderSchema = new Schema({
     ref: 'User'
   },
   OrderItems: [{
-    orderItem_id: {
       type: Schema.Types.ObjectId,
       ref: 'OrderItem'
-    }
+    
   }],
   total: {
     type: Number,
@@ -20,7 +19,7 @@ const OrderSchema = new Schema({
   },
   status: {
     type: String,
-    required: true
+    required: true,
   },
   paymentMethod: {
     type: String,
