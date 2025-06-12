@@ -322,6 +322,90 @@ const getCart = async (req, res) => {
     }
 };
 
+const getLatestCartItem = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID is required'
+            });
+        }
+
+        // Find user's cart with populated data
+        const cart = await Cart.findOne({ userId })
+            .populate({
+                path: 'cartItems.cartItem_id',
+                populate: [
+                    {
+                        path: 'productId',
+                        model: 'Product',
+                        select: 'name description price images variants'
+                    },
+                    {
+                        path: 'productVariantId',
+                        model: 'ProductVariant',
+                        select: 'sku price stock attributes images sellPrice',
+                        populate: {
+                            path: 'attribute',
+                            model: 'Attribute',
+                            select: 'value description'
+                        }
+                    }
+                ]
+            });
+
+        if (!cart || cart.cartItems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No items found in cart'
+            });
+        }
+
+        // Get the last added cart item (last in the array)
+        const lastCartItem = cart.cartItems[cart.cartItems.length - 1].cartItem_id;
+        
+        // Transform the cart item data
+        const latestItem = {
+            _id: lastCartItem._id,
+            quantity: lastCartItem.quantity,
+            product: {
+                _id: lastCartItem.productId._id,
+                name: lastCartItem.productId.name,
+                description: lastCartItem.productId.description,
+                price: lastCartItem.productId.price,
+                images: lastCartItem.productId.images,
+                selectedVariant: {
+                    _id: lastCartItem.productVariantId._id,
+                    sku: lastCartItem.productVariantId.sku,
+                    price: lastCartItem.productVariantId.sellPrice,
+                    stock: lastCartItem.productVariantId.stock,
+                    images: lastCartItem.productVariantId.images,
+                    attributes: lastCartItem.productVariantId.attribute.map(attr => ({
+                        value: attr.value,
+                        description: attr.description
+                    }))
+                }
+            }
+        };
+
+        return res.status(200).json({
+            success: true,
+            message: 'Latest cart item retrieved successfully',
+            data: latestItem
+        });
+
+    } catch (error) {
+        console.error('Error getting latest cart item:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
 const deleteCartItem = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -403,5 +487,6 @@ module.exports = {
     addToCart,
     updateCart,
     getCart,
-    deleteCartItem
+    deleteCartItem,
+    getLatestCartItem
 };
