@@ -5,7 +5,7 @@ const addressSchema = new mongoose.Schema({
   city: { type: String, required: true },
   state: { type: String },
   postalCode: { type: String, required: true },
-  country: { type: String, required: true }
+  country: { type: String, required: true, default: 'Vietnam' }
 }, { _id: true });
 
 const userSchema = new mongoose.Schema({

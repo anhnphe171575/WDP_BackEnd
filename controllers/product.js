@@ -297,10 +297,211 @@ const getProductDetailsByCategory = async (req, res) => {
     }
 };
 
+const getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
 
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid product ID'
+            });
+        }
+
+        const product = await Product.aggregate([
+            { $match: { _id: new mongoose.Types.ObjectId(id) } },
+            {
+                $lookup: {
+                    from: 'productvariants',
+                    localField: '_id',
+                    foreignField: 'product_id',
+                    as: 'variants'
+                }
+            },
+            { $unwind: { path: '$variants', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'importbatches',
+                    localField: 'variants._id',
+                    foreignField: 'variantId',
+                    as: 'variants.importBatches'
+                }
+            },
+            {
+                $addFields: {
+                    'variants.totalQuantity': {
+                        $sum: '$variants.importBatches.quantity'
+                    },
+                    'variants.importBatches': {
+                        $map: {
+                            input: '$variants.importBatches',
+                            as: 'batch',
+                            in: {
+                                _id: '$$batch._id',
+                                importDate: '$$batch.importDate',
+                                quantity: '$$batch.quantity',
+                                costPrice: '$$batch.costPrice'
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: '$_id',
+                    name: { $first: '$name' },
+                    description: { $first: '$description' },
+                    category: { $first: '$category' },
+                    createAt: { $first: '$createAt' },
+                    updateAt: { $first: '$updateAt' },
+                    variants: { $push: '$variants' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'category',
+                    foreignField: '_id',
+                    as: 'categoryInfo'
+                }
+            },
+            {
+                $addFields: {
+                    category: {
+                        $map: {
+                            input: '$categoryInfo',
+                            as: 'cat',
+                            in: {
+                                id: '$$cat._id',
+                                name: '$$cat.name'
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'reviews',
+                    localField: '_id',
+                    foreignField: 'productId',
+                    as: 'reviews'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'reviews.userId',
+                    foreignField: '_id',
+                    as: 'reviewUsers'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: {
+                        $avg: '$reviews.rating'
+                    },
+                    totalReviews: {
+                        $size: '$reviews'
+                    },
+                    reviews: {
+                        $map: {
+                            input: '$reviews',
+                            as: 'review',
+                            in: {
+                                _id: '$$review._id',
+                                rating: '$$review.rating',
+                                comment: '$$review.comment',
+                                images: '$$review.images',
+                                createdAt: '$$review.createdAt',
+                                user: {
+                                    $let: {
+                                        vars: {
+                                            user: {
+                                                $arrayElemAt: [
+                                                    {
+                                                        $filter: {
+                                                            input: '$reviewUsers',
+                                                            as: 'u',
+                                                            cond: { $eq: ['$$u._id', '$$review.userId'] }
+                                                        }
+                                                    },
+                                                    0
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            _id: '$$user._id',
+                                            name: '$$user.name',
+                                            avatar: '$$user.avatar'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            // Unwind variants to process attributes
+            { $unwind: '$variants' },
+            // Lookup attributes for each variant
+            {
+                $lookup: {
+                    from: 'attributes',
+                    localField: 'variants.attribute',
+                    foreignField: '_id',
+                    as: 'variants.attributeDetails'
+                }
+            },
+            // Group back by product
+            {
+                $group: {
+                    _id: '$_id',
+                    name: { $first: '$name' },
+                    description: { $first: '$description' },
+                    category: { $first: '$category' },
+                    createAt: { $first: '$createAt' },
+                    updateAt: { $first: '$updateAt' },
+                    averageRating: { $first: '$averageRating' },
+                    totalReviews: { $first: '$totalReviews' },
+                    reviews: { $first: '$reviews' },
+                    variants: {
+                        $push: {
+                            _id: '$variants._id',
+                            images: '$variants.images',
+                            sellPrice: '$variants.sellPrice',
+                            totalQuantity: '$variants.totalQuantity',
+                            importBatches: '$variants.importBatches',
+                            attributes: '$variants.attributeDetails'
+                        }
+                    }
+                }
+            }
+        ]);
+
+        if (!product || product.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: product[0]
+        });
+    } catch (error) {
+        console.error('Error in getProductById:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting product details',
+            error: error.message
+        });
+    }
+};
 
 module.exports = {
     getTopSellingProducts,
     getProductsByCategory,
-    getProductDetailsByCategory
+    getProductDetailsByCategory,
+    getProductById
 };
