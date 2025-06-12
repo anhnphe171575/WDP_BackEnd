@@ -2,6 +2,8 @@ const Order = require('../models/order');
 const OrderItem = require('../models/orderItem');
 const Voucher = require('../models/voucher')
 const Product = require('../models/product')
+const ProductVariant = require('../models/productVariant')
+const Attribute = require('../models/attribute')
 
 // Create new order
 exports.createOrder = async (req, res) => {
@@ -28,14 +30,26 @@ exports.createOrder = async (req, res) => {
 exports.getAllOrders = async (req, res) => {
     try {
         const orders = await Order.find()
-            .populate('userId', 'name email')
+            .populate('userId', 'name email address')
             .populate({
                 path: 'OrderItems',
-                populate: {
-                    path: 'productId',
-                    model: 'Product',
-                    select: 'name image'
+                populate: [
+                    {
+                      path: 'productId',
+                      model: 'Product',
+                      select: 'name'
+                    },
+                    {
+                      path: 'productVariant',
+                      model: 'ProductVariant',
+                      select: 'images ', 
+                      populate: {
+                        path: 'attribute',
+                        model: 'Attribute',
+                        select: 'value description'
+                    }
                 }
+                  ]
             })
             .populate('voucher');
         res.status(200).json(orders);
