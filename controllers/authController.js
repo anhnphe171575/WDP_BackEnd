@@ -25,15 +25,6 @@ exports.login = async (req, res) => {
         message: 'Vui lòng nhập email và mật khẩu'
       });
     }
-
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email hoặc mật khẩu không đúng'
-      });
-    }
         // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
@@ -43,14 +34,6 @@ exports.login = async (req, res) => {
             });
         }
 
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email hoặc mật khẩu không đúng'
-      });
-    }
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
