@@ -104,7 +104,148 @@ const getParentCategories = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Hàm đệ quy để lấy tất cả categories con
+const getAllChildCategories = async (parentId, currentDepth = 1) => {
+    // Stop recursion if we've reached depth 3
+    if (currentDepth >= 3) {
+        return [];
+    }
+
+    const children = await Category.find({
+        parentCategory: parentId
+    }).select('_id name description image');
+
+    const result = [];
+    for (const child of children) {
+        const grandChildren = await getAllChildCategories(child._id, currentDepth + 1);
+        result.push({
+            ...child.toObject(),
+            children: grandChildren
+        });
+    }
+    return result;
+};
+
+const getChildCategories = async (req, res) => {
+    try {
+        // Lấy tất cả categories cha (parentCategory: null)
+        const parentCategories = await Category.find({ 
+            parentCategory: null 
+        }).select('_id name description image');
+
+        // Tạo một mảng để lưu kết quả cuối cùng
+        const result = [];
+
+        // Với mỗi category cha, tìm tất cả categories con và cháu
+        for (const parent of parentCategories) {
+            const allChildren = await getAllChildCategories(parent._id);
+
+            // Thêm category cha và tất cả categories con vào kết quả
+            result.push({
+                parent: {
+                    _id: parent._id,
+                    name: parent.name,
+                    description: parent.description,
+                    image: parent.image
+                },
+                children: allChildren
+            });
+        }
+
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getChildCategoriesByParentId = async (req, res) => {
+    try {
+        const parentId = req.params.parentId;
+
+        // Validate parentId
+        if (!parentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parent ID is required'
+            });
+        }
+
+        // Find child categories
+        const childCategories = await Category.find({
+            parentCategory: parentId
+        }).select('_id name description image');
+
+        res.status(200).json({
+            success: true,
+            data: childCategories
+        });
+    } catch (error) {
+        console.error('Error getting child categories:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting child categories',
+            error: error.message
+        });
+    }
+};
+
+const getCategoryWithLevel = async (req, res) => {
+    try {
+        const categoryId = req.params.id;
+        
+        // Find the category
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Determine the level by checking parent categories
+        let level = 1;
+        let currentCategory = category;
+        let parentChain = [];
+
+        while (currentCategory.parentCategory) {
+            const parent = await Category.findById(currentCategory.parentCategory);
+            if (!parent) break;
+            
+            parentChain.unshift({
+                _id: parent._id,
+                name: parent.name
+            });
+            
+            currentCategory = parent;
+            level++;
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                _id: category._id,
+                name: category.name,
+                description: category.description,
+                image: category.image,
+                level: level,
+                parentChain: parentChain
+            }
+        });
+    } catch (error) {
+        console.error('Error getting category with level:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting category details',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllCategoriesPopular,
     getParentCategories,
+    getChildCategories,
+    getChildCategoriesByParentId,
+    getCategoryWithLevel
 };

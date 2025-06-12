@@ -8,13 +8,14 @@ const productSchema = new mongoose.Schema({
   description: {
     type: String,
   },
+  brand: {
+    type: String,
+  },
   category: [
-    {
-      categoryId: {
-        type: mongoose.Schema.Types.ObjectId,
+   {
+        type: mongoose.Schema.Types.ObjectId,  
         ref: 'Category',
       },
-    },
   ],
   createAt: {
     type: Date,
