@@ -7,6 +7,11 @@ const cartItemSchema = new Schema({
     ref: 'Product',
     required: true
   },
+  productVariantId: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProductVariant',
+    required: true
+  },  
   quantity: {
     type: Number,
     required: true,

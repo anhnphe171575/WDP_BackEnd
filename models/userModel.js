@@ -5,7 +5,7 @@ const addressSchema = new mongoose.Schema({
   city: { type: String, required: true },
   state: { type: String },
   postalCode: { type: String, required: true },
-  country: { type: String, required: true }
+  country: { type: String, required: true, default: 'Vietnam' }
 }, { _id: true });
 
 const userSchema = new mongoose.Schema({
@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   phone: { type: String },
   dob: { type: Date }, 
-  role: { type: Number, default: 0 }, 
+  role: { type: Number, default: 1 }, 
   verified: { type: Boolean, default: false },
   verificationToken: {
     type: String,

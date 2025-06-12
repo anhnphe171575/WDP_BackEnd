@@ -4,7 +4,7 @@ const importBatchSchema = new mongoose.Schema({
   variantId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: 'Variant'
+    ref: 'ProductVariant'
   },
   importDate: {
     type: Date,

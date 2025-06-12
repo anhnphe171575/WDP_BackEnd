@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const Attribute = require('./attribute');
 
 const productVariantSchema = new Schema({
   product_id: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -9,7 +8,7 @@ const productVariantSchema = new Schema({
   }],
   attribute: [{
     type: Schema.Types.ObjectId,
-    ref: Attribute
+    ref: 'Attribute'
   }],
   sellPrice: { type: Number, required: true }
 });

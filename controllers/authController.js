@@ -25,24 +25,29 @@ exports.login = async (req, res) => {
         message: 'Vui lòng nhập email và mật khẩu'
       });
     }
+        // Find user by email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email hoặc mật khẩu không đúng'
+            });
+        }
 
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email hoặc mật khẩu không đúng'
-      });
-    }
-
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email hoặc mật khẩu không đúng'
-      });
-    }
+        // Compare password
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email hoặc mật khẩu không đúng'
+            });
+        }
+        if(!user.verified){
+          return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email của bạn để kích hoạt tài khoản.'
+        });
+        }
 
     // Create JWT token
     const token = jwt.sign(
@@ -382,6 +387,25 @@ exports.googleAuth = async (req, res) => {
       }
       await user.save();
     }
+        if (!user) {
+            // Create new user if doesn't exist
+            user = new User({
+                name,
+                email,
+                role: 1, // Default role for normal user
+                verified: true, // Google accounts are pre-verified
+                avatar: picture,
+                googleId // Store Google ID for future reference
+            });
+            await user.save();
+        } else if (!user.googleId) {
+            // If user exists but doesn't have googleId, update it
+            user.googleId = googleId;
+            if (!user.avatar) {
+                user.avatar = picture;
+            }
+            await user.save();
+        }
 
     // Create JWT token
     const token = jwt.sign(
