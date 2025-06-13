@@ -9,11 +9,10 @@ const CartSchema = new Schema({
     ref: 'User'
   },
   cartItems: [{
-    cartItem_id: {
       type: Schema.Types.ObjectId,
       ref: 'CartItem'
     }
-  }],
+],
 }, {
   timestamps: { createdAt: 'createAt', updatedAt: 'updateAt' }
 });
