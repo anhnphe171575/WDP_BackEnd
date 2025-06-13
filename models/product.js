@@ -17,6 +17,10 @@ const productSchema = new mongoose.Schema({
         ref: 'Category',
       },
   ],
+  variants: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ProductVariant'
+  }],
   createAt: {
     type: Date,
     default: Date.now,
