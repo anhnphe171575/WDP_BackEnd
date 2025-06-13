@@ -3,9 +3,7 @@ const Order = require('../models/order');
 const mongoose = require('mongoose');
 const Attribute = require('../models/attribute'); // adjust path as needed
 const Category = require('../models/category');
-const Attribute = require('../models/attribute');
 const ProductVariant = require('../models/productVariant');
-const mongoose = require('mongoose');
 
 // Get top 5 best-selling products or 5 most recent products if no sales
 const getTopSellingProducts = async (req, res) => {
