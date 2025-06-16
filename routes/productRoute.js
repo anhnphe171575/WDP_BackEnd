@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory } = require('../controllers/product');
+const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct } = require('../controllers/product');
 
 /**
  * @swagger     
@@ -20,6 +20,7 @@ router.post('/:productId/variant', createProductVariant);
 router.put('/variant/:variantId', updateProductVariant);
 router.delete('/variant/:variantId', deleteProductVariant);
 router.post('/',createProduct);
+router.put('/:productId',updateProduct);
 router.delete('/:productId',deleteProduct)
 router.get('/productsByCategory/:categoryId', getProductsByCategory);
 router.get('/productDetailsByCategory/:categoryId', getProductDetailsByCategory);

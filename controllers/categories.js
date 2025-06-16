@@ -100,9 +100,15 @@ const getAllCategoriesPopular = async (req, res) => {
 const getParentCategories = async (req, res) => {
     try {
         const parentCategories = await Category.find({ parentCategory: null }).select('_id name description image');
-        res.status(200).json(parentCategories);
+        res.status(200).json({
+            success: true,
+            data: parentCategories
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: error.message 
+        });
     }
 };
 
@@ -279,57 +285,7 @@ const getChildCategoriesByParentId = async (req, res) => {
     }
 };
 
-const getCategoryWithLevel = async (req, res) => {
-    try {
-        const categoryId = req.params.id;
-        
-        // Find the category
-        const category = await Category.findById(categoryId);
-        if (!category) {
-            return res.status(404).json({
-                success: false,
-                message: 'Category not found'
-            });
-        }
 
-        // Determine the level by checking parent categories
-        let level = 1;
-        let currentCategory = category;
-        let parentChain = [];
-
-        while (currentCategory.parentCategory) {
-            const parent = await Category.findById(currentCategory.parentCategory);
-            if (!parent) break;
-            
-            parentChain.unshift({
-                _id: parent._id,
-                name: parent.name
-            });
-            
-            currentCategory = parent;
-            level++;
-        }
-
-        res.status(200).json({
-            success: true,
-            data: {
-                _id: category._id,
-                name: category.name,
-                description: category.description,
-                image: category.image,
-                level: level,
-                parentChain: parentChain
-            }
-        });
-    } catch (error) {
-        console.error('Error getting category with level:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error getting category details',
-            error: error.message
-        });
-    }
-};
 
 module.exports = {
     getAllCategoriesPopular,
@@ -337,6 +293,5 @@ module.exports = {
     getChildCategories,
     getCategoryChildrenById,
     getAttributesByCategoryId,
-    getChildCategoriesByParentId,
-    getCategoryWithLevel
+    getChildCategoriesByParentId
 };
