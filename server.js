@@ -20,7 +20,6 @@ const userRoute = require('./routes/userRoute');
 const voucherRoute = require('./routes/voucherRoute');
 const orderRoute = require('./routes/orderRoute')
 const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
-const userRoute = require('./routes/userRoute'); // ✅ Đã giữ lại dòng này
 const cartRoute = require('./routes/cartRoute');
 const reviewRoute = require('./routes/reviewRoute');
 
