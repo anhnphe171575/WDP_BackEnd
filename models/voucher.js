@@ -29,11 +29,7 @@ const voucherSchema = new mongoose.Schema({
   usedCount: {
     type: Number,
     default: 0,
-  },
-  applicableProducts: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-  }],
+  }
 }, {
   timestamps: true,
 });
