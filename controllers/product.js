@@ -604,137 +604,101 @@ const getAllProducts = async (req, res) => {
     }
   };
 
-// Get product by ID
-// const getProductById = async (req, res) => {
-//     try {
-//         const product = await Product.aggregate([
-//             { $match: { _id: new mongoose.Types.ObjectId(req.params.id) } },
-//             {
-//                 $lookup: {
-//                     from: 'categories',
-//                     localField: 'category.categoryId',
-//                     foreignField: '_id',
-//                     as: 'categoryDetails'
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'productvariants',
-//                     localField: '_id',
-//                     foreignField: 'product_id',
-//                     as: 'variants'
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'attributes',
-//                     localField: 'variants.attribute',
-//                     foreignField: '_id',
-//                     as: 'attributeDetails'
-//                 }
-//             }
-//         ]);
-
-//         if (!product.length) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: 'Product not found'
-//             });
-//         }
-
-//         res.status(200).json({
-//             success: true,
-//             data: product[0]
-//         });
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: 'Error getting product',
-//             error: error.message
-//         });
-//     }
-// };
 
 // Update product
 const updateProduct = async (req, res) => {
     try {
-        const { name, description, categories, variants } = req.body;
-        const productId = req.params.id;
+        const { productId } = req.params;
+        const { name, description, categories } = req.body;
 
-        // Validate categories
-        const categoryIds = [];
-        for (const category of categories) {
-            const categoryDoc = await Category.findById(category.categoryId);
-            if (!categoryDoc) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Category with ID ${category.categoryId} not found`
-                });
-            }
-            categoryIds.push(category.categoryId);
+        // Validate productId
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid product ID'
+            });
         }
 
-        // Update product
-        const updatedProduct = await Product.findByIdAndUpdate(
-            productId,
-            {
-                name,
-                description,
-                category: categories,
-                updateAt: Date.now()
-            },
-            { new: true }
-        );
+        // Validate required fields
+        if (!name || !description) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name and description are required'
+            });
+        }
 
-        if (!updatedProduct) {
+        // Find existing product
+        const existingProduct = await Product.findById(productId);
+        if (!existingProduct) {
             return res.status(404).json({
                 success: false,
                 message: 'Product not found'
             });
         }
 
-        // Update variants
-        if (variants) {
-            // Delete existing variants
-            await ProductVariant.deleteMany({ product_id: productId });
+        // Prepare update data
+        const updateData = {
+            name,
+            description
+        };
 
-            // Create new variants
-            for (const variant of variants) {
-                const { images, attributes, sellPrice } = variant;
-
-                // Validate attributes
-                const attributeIds = [];
-                for (const attrId of attributes) {
-                    const attr = await Attribute.findById(attrId);
-                    if (!attr) {
-                        return res.status(400).json({
-                            success: false,
-                            message: `Attribute with ID ${attrId} not found`
-                        });
-                    }
-                    attributeIds.push(attrId);
+        // Only update categories if provided
+        if (categories && Array.isArray(categories)) {
+            // Validate each category has categoryId
+            for (const category of categories) {
+                if (!category.categoryId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Each category must have a categoryId'
+                    });
                 }
-
-                const productVariant = new ProductVariant({
-                    product_id: productId,
-                    images,
-                    attribute: attributeIds,
-                    sellPrice
-                });
-
-                await productVariant.save();
             }
+
+            // Validate all categories exist
+            const categoryIds = categories.map(cat => cat.categoryId);
+            console.log('Validated category IDs:', categoryIds);
+
+            const existingCategories = await Category.find({ _id: { $in: categoryIds } });
+            if (existingCategories.length !== categoryIds.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'One or more categories do not exist'
+                });
+            }
+
+            // Add categories to update data
+            updateData.category = categoryIds;
         }
 
-        res.status(200).json({
+        // Update product
+        const updatedProduct = await Product.findByIdAndUpdate(
+            productId,
+            { $set: updateData },
+            { new: true }
+        ).populate('category');
+
+        // Format response
+        const response = {
+            _id: updatedProduct._id,
+            name: updatedProduct.name,
+            description: updatedProduct.description,
+            category: updatedProduct.category.map(cat => ({
+                _id: cat._id,
+                name: cat.name,
+                description: cat.description
+            }))
+        };
+
+        res.json({
             success: true,
             message: 'Product updated successfully',
-            data: updatedProduct
+            data: response
         });
     } catch (error) {
+        console.error('Error updating product:', error);
         res.status(500).json({
             success: false,
-            message: 'Error updating product',
+            message: 'Internal server error',
             error: error.message
         });
     }
@@ -805,46 +769,6 @@ const deleteProduct = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error deleting product',
-            error: error.message
-        });
-    }
-};
-
-// Update product variant price
-const updateVariantPrice = async (req, res) => {
-    try {
-        const { variantId } = req.params;
-        const { sellPrice } = req.body;
-
-        if (!sellPrice || sellPrice < 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid price value'
-            });
-        }
-
-        const updatedVariant = await ProductVariant.findByIdAndUpdate(
-            variantId,
-            { sellPrice },
-            { new: true }
-        );
-
-        if (!updatedVariant) {
-            return res.status(404).json({
-                success: false,
-                message: 'Product variant not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Price updated successfully',
-            data: updatedVariant
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error updating price',
             error: error.message
         });
     }
@@ -1164,7 +1088,6 @@ module.exports = {
     getAllProducts,
     updateProduct,
     deleteProduct,
-    updateVariantPrice,
     getProductVariantsByProductId,
     getChildAttributesByProductId,
     getChildAttributesByParentId,
