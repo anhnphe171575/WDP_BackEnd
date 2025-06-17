@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
+// get orders dashboard
+router.get('/dashboard', orderController.getOrdersDashboard);
 
 /**
  * @swagger

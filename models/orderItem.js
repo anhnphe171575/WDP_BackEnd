@@ -20,11 +20,6 @@ const orderItemSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  productVariant: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'ProductVariant',
-    required: true
-  }
 });
 
 module.exports = mongoose.model('OrderItem', orderItemSchema);
