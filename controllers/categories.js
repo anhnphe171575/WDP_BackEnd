@@ -285,7 +285,168 @@ const getChildCategoriesByParentId = async (req, res) => {
     }
 };
 
+const createCategory = async (req, res) => {
+    try {
+        const { name, description, image, parentCategory } = req.body;
 
+        // Validate required fields
+        if (!name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category name is required'
+            });
+        }
+
+        // If parentCategory is provided, verify it exists
+        if (parentCategory) {
+            const parentExists = await Category.findById(parentCategory);
+            if (!parentExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Parent category not found'
+                });
+            }
+
+            // Check if parent category already has a parent (max 2 levels)
+            if (parentExists.parentCategory) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot add more than 2 levels of categories'
+                });
+            }
+        }
+
+        // Create new category
+        const newCategory = new Category({
+            name,
+            description,
+            image,
+            parentCategory: parentCategory || null
+        });
+
+        const savedCategory = await newCategory.save();
+
+        res.status(201).json({
+            success: true,
+            data: savedCategory
+        });
+    } catch (error) {
+        console.error('Error creating category:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+const createChildCategory = async (req, res) => {
+    try {
+        const { parentId } = req.params;
+        const { name, description, image } = req.body;
+
+        // Validate required fields
+        if (!name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category name is required'
+            });
+        }
+
+        if (!parentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parent category ID is required'
+            });
+        }
+
+        // Verify parent category exists
+        const parentCategory = await Category.findById(parentId);
+        if (!parentCategory) {
+            return res.status(404).json({
+                success: false,
+                message: 'Parent category not found'
+            });
+        }
+
+        // Check if parent category is already a level 3 category
+        if (parentCategory.parentCategory) {
+            const grandParent = await Category.findById(parentCategory.parentCategory);
+            if (grandParent && grandParent.parentCategory) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot add more than 3 levels of categories'
+                });
+            }
+        }
+
+        // Create new child category
+        const newCategory = new Category({
+            name,
+            description,
+            image,
+            parentCategory: parentId
+        });
+
+        const savedCategory = await newCategory.save();
+
+        res.status(201).json({
+            success: true,
+            data: savedCategory
+        });
+    } catch (error) {
+        console.error('Error creating child category:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+const deleteCategory = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+
+        // Validate categoryId
+        if (!categoryId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category ID is required'
+            });
+        }
+
+        // Find the category to delete
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Check if category has children
+        const hasChildren = await Category.exists({ parentCategory: categoryId });
+        if (hasChildren) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete category with child categories. Please delete child categories first.'
+            });
+        }
+
+        // Delete the category
+        await Category.findByIdAndDelete(categoryId);
+
+        res.status(200).json({
+            success: true,
+            message: 'Category deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 
 module.exports = {
     getAllCategoriesPopular,
@@ -293,5 +454,8 @@ module.exports = {
     getChildCategories,
     getCategoryChildrenById,
     getAttributesByCategoryId,
-    getChildCategoriesByParentId
+    getChildCategoriesByParentId,
+    createCategory,
+    createChildCategory,
+    deleteCategory
 };
