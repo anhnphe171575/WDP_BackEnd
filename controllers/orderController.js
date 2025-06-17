@@ -119,12 +119,55 @@ exports.deleteOrder = async (req, res) => {
     }
 };
 
-// Get orders dashboard
 exports.getOrdersDashboard = async (req, res) => {
     try {
         const totalOrders = await Order.countDocuments();
 
-        // Group theo năm và tháng
+        // Danh sách status cố định
+        const allStatuses = ["pending","processing", "shipped", "cancelled", "completed", "returned"];
+
+        // 1. Group theo năm, tháng và status
+        const ordersStatusByYearMonth = await Order.aggregate([
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createAt' },
+                        month: { $month: '$createAt' },
+                        status: '$status'
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ]);
+
+        // 2. Build resultStatusByYear: đủ 12 tháng và đủ status
+        const statusYearsSet = new Set(ordersStatusByYearMonth.map(item => item._id.year));
+        const statusYears = Array.from(statusYearsSet).sort();
+
+        const resultStatusByYear = statusYears.map(year => {
+            const months = Array.from({ length: 12 }, (_, i) => {
+                const statuses = allStatuses.map(status => ({
+                    status,
+                    count: 0
+                }));
+                return { month: i + 1, statuses };
+            });
+
+            ordersStatusByYearMonth
+                .filter(item => item._id.year === year)
+                .forEach(item => {
+                    const monthIndex = item._id.month - 1;
+                    const statusIndex = allStatuses.indexOf(item._id.status);
+                    if (statusIndex !== -1) {
+                        months[monthIndex].statuses[statusIndex].count = item.count;
+                    }
+                });
+
+            return { year, months };
+        });
+
+        // 3. Group theo năm và tháng (tổng số đơn hàng)
         const ordersByYearMonth = await Order.aggregate([
             {
                 $group: {
@@ -138,19 +181,16 @@ exports.getOrdersDashboard = async (req, res) => {
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
 
-        // Lấy tất cả các năm có trong DB
+        // 4. Build resultByYear
         const yearsSet = new Set(ordersByYearMonth.map(item => item._id.year));
         const years = Array.from(yearsSet).sort();
 
-        // Build kết quả cho từng năm, đủ 12 tháng
         const resultByYear = years.map(year => {
-            // Tạo mảng 12 tháng mặc định count = 0
             const months = Array.from({ length: 12 }, (_, i) => ({
                 month: i + 1,
                 count: 0
             }));
 
-            // Gán số lượng đơn vào đúng tháng
             ordersByYearMonth
                 .filter(item => item._id.year === year)
                 .forEach(item => {
@@ -160,11 +200,13 @@ exports.getOrdersDashboard = async (req, res) => {
             return { year, months };
         });
 
+        // 5. Response
         res.status(200).json({
             totalOrders,
-            ordersByYear: resultByYear
+            ordersByYear: resultByYear,
+            ordersStatusByYearMonth: resultStatusByYear
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
-}
+};
