@@ -9,7 +9,7 @@ const Attribute = require('../models/attribute')
 exports.createOrder = async (req, res) => {
     try {
         const { userId, OrderItems, total, status, paymentMethod, voucher } = req.body;
-        
+
         const order = new Order({
             userId,
             OrderItems,
@@ -35,21 +35,21 @@ exports.getAllOrders = async (req, res) => {
                 path: 'OrderItems',
                 populate: [
                     {
-                      path: 'productId',
-                      model: 'Product',
-                      select: 'name'
+                        path: 'productId',
+                        model: 'Product',
+                        select: 'name'
                     },
                     {
-                      path: 'productVariant',
-                      model: 'ProductVariant',
-                      select: 'images ', 
-                      populate: {
-                        path: 'attribute',
-                        model: 'Attribute',
-                        select: 'value description'
+                        path: 'productVariant',
+                        model: 'ProductVariant',
+                        select: 'images ',
+                        populate: {
+                            path: 'attribute',
+                            model: 'Attribute',
+                            select: 'value description'
+                        }
                     }
-                }
-                  ]
+                ]
             })
             .populate('voucher');
         res.status(200).json(orders);
@@ -71,7 +71,7 @@ exports.getOrderById = async (req, res) => {
                 }
             })
             .populate('voucher');
-            
+
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
@@ -86,7 +86,7 @@ exports.updateOrder = async (req, res) => {
     try {
         const { status, paymentMethod, voucher } = req.body;
         const order = await Order.findById(req.params.id);
-        
+
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
@@ -107,7 +107,7 @@ exports.updateOrder = async (req, res) => {
 exports.deleteOrder = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
-        
+
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
@@ -118,3 +118,53 @@ exports.deleteOrder = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Get orders dashboard
+exports.getOrdersDashboard = async (req, res) => {
+    try {
+        const totalOrders = await Order.countDocuments();
+
+        // Group theo năm và tháng
+        const ordersByYearMonth = await Order.aggregate([
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createAt' },
+                        month: { $month: '$createAt' }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ]);
+
+        // Lấy tất cả các năm có trong DB
+        const yearsSet = new Set(ordersByYearMonth.map(item => item._id.year));
+        const years = Array.from(yearsSet).sort();
+
+        // Build kết quả cho từng năm, đủ 12 tháng
+        const resultByYear = years.map(year => {
+            // Tạo mảng 12 tháng mặc định count = 0
+            const months = Array.from({ length: 12 }, (_, i) => ({
+                month: i + 1,
+                count: 0
+            }));
+
+            // Gán số lượng đơn vào đúng tháng
+            ordersByYearMonth
+                .filter(item => item._id.year === year)
+                .forEach(item => {
+                    months[item._id.month - 1].count = item.count;
+                });
+
+            return { year, months };
+        });
+
+        res.status(200).json({
+            totalOrders,
+            ordersByYear: resultByYear
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}

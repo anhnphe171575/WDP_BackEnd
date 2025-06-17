@@ -20,6 +20,8 @@ const OrderSchema = new Schema({
   status: {
     type: String,
     required: true,
+    emum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    default: 'pending'
   },
   paymentMethod: {
     type: String,
