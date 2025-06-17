@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getAllCategoriesPopular, getParentCategories,   getChildCategories, getCategoryChildrenById, getAttributesByCategoryId,getChildCategoriesByParentId } = require('../controllers/categories');
+const { getAllCategoriesPopular, getParentCategories,   getChildCategories, getCategoryChildrenById, getAttributesByCategoryId,getChildCategoriesByParentId, createCategory, createChildCategory, deleteCategory } = require('../controllers/categories');
+
 /**
  * @swagger
  * /categories/popular:
@@ -54,4 +55,18 @@ router.get('/childCategories/:categoryId', getCategoryChildrenById);
  *         description: Thành công
  */
 router.get('/attributes/:categoryId', getAttributesByCategoryId);
+
+/**
+ * @swagger
+ * /categories:
+ *   post:
+ *     summary: Create a new category
+ *     responses:
+ *       201:
+ *         description: Category created successfully
+ */
+router.post('/', createCategory);
+router.post('/child-category/:parentId', createChildCategory);
+router.delete('/:categoryId', deleteCategory);
+
 module.exports = router;
