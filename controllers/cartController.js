@@ -188,7 +188,7 @@ const updateCart = async (req, res) => {
 const getCart = async (req, res) => {
     try {
         const userId = req.user.id;
-
+          console.log(userId)
         if (!userId) {
             return res.status(400).json({
                 success: false,
@@ -226,8 +226,9 @@ const getCart = async (req, res) => {
             });
         }
 
-        // Get import batches for all variants in cart
         const variantIds = cart.cartItems.map(item => item.cartItem_id.productVariantId._id);
+                  console.log(variantIds)
+
         const importBatches = await ImportBatch.aggregate([
             {
                 $match: {
