@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Attribute = require('../models/attribute'); // adjust path as needed
 const Category = require('../models/category');
 const ProductVariant = require('../models/productVariant');
+const cloudinary = require('../config/cloudinary');
 
 // Get top 5 best-selling products or 5 most recent products if no sales
 const getTopSellingProducts = async (req, res) => {
@@ -59,6 +60,7 @@ const getTopSellingProducts = async (req, res) => {
                     _id: 1,
                     name: '$productDetails.name',
                     description: '$productDetails.description',
+                    brand: '$productDetails.brand',
                     totalSold: 1,
                     minSellPrice: { $min: '$variants.sellPrice' },
                     images: {
@@ -90,6 +92,7 @@ const getTopSellingProducts = async (req, res) => {
                         _id: 1,
                         name: 1,
                         description: 1,
+                        brand: 1,
                         totalSold: { $literal: 0 },
                         minSellPrice: { $min: '$variants.sellPrice' },
                         images: {
@@ -173,6 +176,7 @@ const getProductsByCategory = async (req, res) => {
                     _id: '$_id',
                     name: { $first: '$name' },
                     description: { $first: '$description' },
+                    brand: { $first: '$brand' },
                     category: { $first: '$category' },
                     variants: { $push: '$variants' }
                 }
@@ -189,6 +193,7 @@ const getProductsByCategory = async (req, res) => {
                     _id: 1,
                     name: 1,
                     description: 1,
+                    brand: 1,
                     category: 1,
                     minSellPrice: { $min: '$variants.sellPrice' },
                     images: {
@@ -261,6 +266,7 @@ const getProductDetailsByCategory = async (req, res) => {
                     _id: '$_id',
                     name: { $first: '$name' },
                     description: { $first: '$description' },
+                    brand: { $first: '$brand' },
                     category: { $first: '$category' },
                     createAt: { $first: '$createAt' },
                     updateAt: { $first: '$updateAt' },
@@ -272,6 +278,7 @@ const getProductDetailsByCategory = async (req, res) => {
                     _id: 1,
                     name: 1,
                     description: 1,
+                    brand: 1,
                     category: 1,
                     createAt: 1,
                     updateAt: 1,
@@ -353,10 +360,23 @@ const getProductById = async (req, res) => {
                     _id: '$_id',
                     name: { $first: '$name' },
                     description: { $first: '$description' },
+                    brand: { $first: '$brand' },
                     category: { $first: '$category' },
                     createAt: { $first: '$createAt' },
                     updateAt: { $first: '$updateAt' },
-                    variants: { $push: '$variants' }
+                    averageRating: { $first: '$averageRating' },
+                    totalReviews: { $first: '$totalReviews' },
+                    reviews: { $first: '$reviews' },
+                    variants: {
+                        $push: {
+                            _id: '$variants._id',
+                            images: '$variants.images',
+                            sellPrice: '$variants.sellPrice',
+                            totalQuantity: '$variants.totalQuantity',
+                            importBatches: '$variants.importBatches',
+                            attributes: '$variants.attributeDetails'
+                        }
+                    }
                 }
             },
             {
@@ -460,6 +480,7 @@ const getProductById = async (req, res) => {
                     _id: '$_id',
                     name: { $first: '$name' },
                     description: { $first: '$description' },
+                    brand: { $first: '$brand' },
                     category: { $first: '$category' },
                     createAt: { $first: '$createAt' },
                     updateAt: { $first: '$updateAt' },
@@ -504,13 +525,13 @@ const getProductById = async (req, res) => {
 // Create new product
 const createProduct = async (req, res) => {
     try {
-        const { name, description, categories } = req.body;
+        const { name, description, brand, categories } = req.body;
         
-        console.log('Received data for product creation:', { name, description, categories });
+        console.log('Received data for product creation:', { name, description, brand, categories });
 
         // Validate required fields
         if (!name || !description || !categories || categories.length === 0) {
-            console.log('Validation failed:', { name, description, categories });
+            console.log('Validation failed:', { name, description, brand, categories });
             return res.status(400).json({
                 success: false,
                 message: 'Name, description and at least one category are required'
@@ -543,10 +564,11 @@ const createProduct = async (req, res) => {
             }
         }
 
-        // Create product with all categories
+        // Create product with all categories and brand
         const product = new Product({
             name,
             description,
+            brand: brand || '',
             category: categoryArray
         });
 
@@ -609,7 +631,7 @@ const getAllProducts = async (req, res) => {
 const updateProduct = async (req, res) => {
     try {
         const { productId } = req.params;
-        const { name, description, categories } = req.body;
+        const { name, description, brand, categories } = req.body;
 
         // Validate productId
         if (!mongoose.Types.ObjectId.isValid(productId)) {
@@ -639,7 +661,8 @@ const updateProduct = async (req, res) => {
         // Prepare update data
         const updateData = {
             name,
-            description
+            description,
+            brand: brand || ''
         };
 
         // Only update categories if provided
@@ -682,6 +705,7 @@ const updateProduct = async (req, res) => {
             _id: updatedProduct._id,
             name: updatedProduct.name,
             description: updatedProduct.description,
+            brand: updatedProduct.brand,
             category: updatedProduct.category.map(cat => ({
                 _id: cat._id,
                 name: cat.name,
@@ -921,7 +945,27 @@ const getChildAttributesByParentId = async (req, res) => {
 const createProductVariant = async (req, res) => {
     try {
         const productId = req.params.productId;
-        const { images, attributes, sellPrice } = req.body;
+        let { images, attributes, sellPrice } = req.body;
+
+        // Nếu nhận qua multipart/form-data, xử lý file ảnh
+        let imageUrls = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const result = await cloudinary.uploader.upload(file.path, { folder: 'product-variants' });
+                imageUrls.push({ url: result.secure_url });
+            }
+        } else if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, { folder: 'product-variants' });
+            imageUrls.push({ url: result.secure_url });
+        } else if (images && typeof images === 'string') {
+            // Nếu images là chuỗi json
+            try {
+                images = JSON.parse(images);
+            } catch {}
+        }
+        if (imageUrls.length > 0) {
+            images = imageUrls;
+        }
 
         // Validate product exists
         const product = await Product.findById(productId);
@@ -1079,6 +1123,185 @@ const updateProductVariant = async (req, res) => {
     }
 };
 
+// Import Batch Management Functions
+const getImportBatchesByVariantId = async (req, res) => {
+    try {
+        const variantId = req.params.variantId;
+
+        // Check if variant exists first
+        const variant = await ProductVariant.findById(variantId);
+        if (!variant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product variant not found'
+            });
+        }
+
+        const ImportBatch = require('../models/import_batches');
+        const importBatches = await ImportBatch.find({ variantId })
+            .sort({ importDate: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: importBatches || []
+        });
+    } catch (error) {
+        console.error('Error getting import batches:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting import batches',
+            error: error.message
+        });
+    }
+};
+
+const createImportBatch = async (req, res) => {
+    try {
+        const variantId = req.params.variantId;
+        const { importDate, quantity, costPrice } = req.body;
+
+        // Validate variant exists
+        const variant = await ProductVariant.findById(variantId);
+        if (!variant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product variant not found'
+            });
+        }
+
+        // Validate required fields
+        if (!importDate || !quantity || costPrice === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Import date, quantity and cost price are required'
+            });
+        }
+
+        if (quantity <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Quantity must be greater than 0'
+            });
+        }
+
+        if (costPrice <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cost price must be greater than 0'
+            });
+        }
+
+        const ImportBatch = require('../models/import_batches');
+        const importBatch = new ImportBatch({
+            variantId,
+            importDate: new Date(importDate),
+            quantity,
+            costPrice
+        });
+
+        await importBatch.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Import batch created successfully',
+            data: importBatch
+        });
+    } catch (error) {
+        console.error('Error creating import batch:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error creating import batch',
+            error: error.message
+        });
+    }
+};
+
+const updateImportBatch = async (req, res) => {
+    try {
+        const batchId = req.params.batchId;
+        const { importDate, quantity, costPrice } = req.body;
+
+        const ImportBatch = require('../models/import_batches');
+        const existingBatch = await ImportBatch.findById(batchId);
+        if (!existingBatch) {
+            return res.status(404).json({
+                success: false,
+                message: 'Import batch not found'
+            });
+        }
+
+        // Validate required fields
+        if (!importDate || !quantity || costPrice === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Import date, quantity and cost price are required'
+            });
+        }
+
+        if (quantity <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Quantity must be greater than 0'
+            });
+        }
+
+        if (costPrice <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cost price must be greater than 0'
+            });
+        }
+
+        // Update batch
+        existingBatch.importDate = new Date(importDate);
+        existingBatch.quantity = quantity;
+        existingBatch.costPrice = costPrice;
+
+        await existingBatch.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Import batch updated successfully',
+            data: existingBatch
+        });
+    } catch (error) {
+        console.error('Error updating import batch:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating import batch',
+            error: error.message
+        });
+    }
+};
+
+const deleteImportBatch = async (req, res) => {
+    try {
+        const batchId = req.params.batchId;
+
+        const ImportBatch = require('../models/import_batches');
+        const deletedBatch = await ImportBatch.findByIdAndDelete(batchId);
+
+        if (!deletedBatch) {
+            return res.status(404).json({
+                success: false,
+                message: 'Import batch not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Import batch deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting import batch:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting import batch',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getTopSellingProducts,
     getProductsByCategory,
@@ -1093,5 +1316,9 @@ module.exports = {
     getChildAttributesByParentId,
     createProductVariant,
     deleteProductVariant,
-    updateProductVariant
+    updateProductVariant,
+    getImportBatchesByVariantId,
+    createImportBatch,
+    updateImportBatch,
+    deleteImportBatch
 };
