@@ -12,7 +12,7 @@ const addToCart = async (req, res) => {
         console.log(req.body);
 
         // Validate input
-        if (!userId || !productId || !productVariantId || !quantity) {
+        if (!userId || !productId  || !quantity) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: userId, productId, productVariantId, quantity'
@@ -33,12 +33,7 @@ const addToCart = async (req, res) => {
             _id: productVariantId,
             product_id: productId
         });
-        if (!productVariant) {
-            return res.status(404).json({
-                success: false,
-                message: 'Product variant not found'
-            });
-        }
+      
 
         // Find or create cart for user
         let cart = await Cart.findOne({ userId });
@@ -277,19 +272,21 @@ const getCart = async (req, res) => {
                         description: cartItem.productId.description,
                         price: cartItem.productId.price,
                         images: cartItem.productId.images,
-                        selectedVariant: {
-                            _id: cartItem.productVariantId._id,
-                            sku: cartItem.productVariantId.sku,
-                            price: cartItem.productVariantId.sellPrice,
-                            stock: cartItem.productVariantId.stock,
-                            images: cartItem.productVariantId.images,
-                            totalImportQuantity: importBatchData.totalQuantity,
-                            importBatches: importBatchData.batches,
-                            attributes: cartItem.productVariantId.attribute.map(attr => ({
-                                value: attr.value,
-                                description: attr.description
-                            }))
-                        },
+                        ...(cartItem.productVariantId && {
+                            selectedVariant: {
+                                _id: cartItem.productVariantId._id,
+                                sku: cartItem.productVariantId.sku,
+                                price: cartItem.productVariantId.sellPrice,
+                                stock: cartItem.productVariantId.stock,
+                                images: cartItem.productVariantId.images,
+                                totalImportQuantity: importBatchData.totalQuantity,
+                                importBatches: importBatchData.batches,
+                                attributes: cartItem.productVariantId.attribute.map(attr => ({
+                                    value: attr.value,
+                                    description: attr.description
+                                }))
+                            }
+                        }),
                         variants: cartItem.productId.variants
                     }
                 };
@@ -375,17 +372,19 @@ const getLatestCartItem = async (req, res) => {
                 description: lastCartItem.productId.description,
                 price: lastCartItem.productId.price,
                 images: lastCartItem.productId.images,
-                selectedVariant: {
-                    _id: lastCartItem.productVariantId._id,
-                    sku: lastCartItem.productVariantId.sku,
-                    price: lastCartItem.productVariantId.sellPrice,
-                    stock: lastCartItem.productVariantId.stock,
-                    images: lastCartItem.productVariantId.images,
-                    attributes: lastCartItem.productVariantId.attribute.map(attr => ({
-                        value: attr.value,
-                        description: attr.description
-                    }))
-                }
+                ...(lastCartItem.productVariantId && {
+                    selectedVariant: {
+                        _id: lastCartItem.productVariantId._id,
+                        sku: lastCartItem.productVariantId.sku,
+                        price: lastCartItem.productVariantId.sellPrice,
+                        stock: lastCartItem.productVariantId.stock,
+                        images: lastCartItem.productVariantId.images,
+                        attributes: lastCartItem.productVariantId.attribute.map(attr => ({
+                            value: attr.value,
+                            description: attr.description
+                        }))
+                    }
+                })
             }
         };
 
