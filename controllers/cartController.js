@@ -67,7 +67,7 @@ const addToCart = async (req, res) => {
             await newCartItem.save();
             
             // Add cart item to cart
-            cart.cartItems.push({ cartItem_id: newCartItem._id });
+            cart.cartItems.push(newCartItem._id);
         }
 
         await cart.save();
@@ -75,7 +75,7 @@ const addToCart = async (req, res) => {
         // Populate cart items with product and variant details
         const populatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -145,7 +145,7 @@ const updateCart = async (req, res) => {
 
         // Verify cart item belongs to user's cart
         const isItemInCart = cart.cartItems.some(item => 
-            item.cartItem_id.toString() === cartItemId
+            item.toString() === cartItemId
         );
 
         if (!isItemInCart) {
@@ -162,7 +162,7 @@ const updateCart = async (req, res) => {
         // Get updated cart with populated data
         const updatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: {
                     path: 'productId',
                     model: 'Product'
@@ -188,7 +188,7 @@ const updateCart = async (req, res) => {
 const getCart = async (req, res) => {
     try {
         const userId = req.user.id;
-          console.log(userId)
+
         if (!userId) {
             return res.status(400).json({
                 success: false,
@@ -199,7 +199,7 @@ const getCart = async (req, res) => {
         // Find user's cart with populated data
         const cart = await Cart.findOne({ userId })
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -226,9 +226,8 @@ const getCart = async (req, res) => {
             });
         }
 
-        const variantIds = cart.cartItems.map(item => item.cartItem_id.productVariantId._id);
-                  console.log(variantIds)
-
+        // Get import batches for all variants in cart
+        const variantIds = cart.cartItems.map(item => item.productVariantId._id);
         const importBatches = await ImportBatch.aggregate([
             {
                 $match: {
@@ -265,8 +264,7 @@ const getCart = async (req, res) => {
             userId: cart.userId,
             createdAt: cart.createdAt,
             updatedAt: cart.updatedAt,
-            cartItems: cart.cartItems.map(item => {
-                const cartItem = item.cartItem_id;
+            cartItems: cart.cartItems.map(cartItem => {
                 const variantId = cartItem.productVariantId._id.toString();
                 const importBatchData = importBatchMap[variantId] || { totalQuantity: 0, batches: [] };
 
@@ -337,7 +335,7 @@ const getLatestCartItem = async (req, res) => {
         // Find user's cart with populated data
         const cart = await Cart.findOne({ userId })
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -365,7 +363,7 @@ const getLatestCartItem = async (req, res) => {
         }
 
         // Get the last added cart item (last in the array)
-        const lastCartItem = cart.cartItems[cart.cartItems.length - 1].cartItem_id;
+        const lastCartItem = cart.cartItems[cart.cartItems.length - 1];
         
         // Transform the cart item data
         const latestItem = {
@@ -439,7 +437,7 @@ const deleteCartItem = async (req, res) => {
 
         // Verify cart item belongs to user's cart
         const isItemInCart = cart.cartItems.some(item => 
-            item.cartItem_id.toString() === cartItemId
+            item.toString() === cartItemId
         );
 
         if (!isItemInCart) {
@@ -451,7 +449,7 @@ const deleteCartItem = async (req, res) => {
 
         // Remove cart item from cart
         cart.cartItems = cart.cartItems.filter(item => 
-            item.cartItem_id.toString() !== cartItemId
+            item.toString() !== cartItemId
         );
         await cart.save();
 
@@ -461,7 +459,7 @@ const deleteCartItem = async (req, res) => {
         // Get updated cart with populated data
         const updatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: {
                     path: 'productId',
                     model: 'Product'
