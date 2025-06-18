@@ -3,6 +3,8 @@ const Order = require('../models/order');
 const OrderItem = require('../models/orderItem');
 const Product = require('../models/product');
 const Attribute = require('../models/attribute');
+const { cloudinary } = require('../config/cloudinary');
+const fs = require('fs');
 
 const getAllCategoriesPopular = async (req, res) => {
     try {
@@ -287,7 +289,8 @@ const getChildCategoriesByParentId = async (req, res) => {
 
 const createCategory = async (req, res) => {
     try {
-        const { name, description, image, parentCategory } = req.body;
+        const { name, description, parentCategory } = req.body;
+        let imageUrl = null;
 
         // Validate required fields
         if (!name) {
@@ -316,11 +319,28 @@ const createCategory = async (req, res) => {
             }
         }
 
+        // Handle image upload if provided
+        if (req.file) {
+            try {
+                const result = await cloudinary.uploader.upload(req.file.path, {
+                    folder: 'categories',
+                });
+                imageUrl = result.secure_url;
+                console.log('Uploaded image URL:', imageUrl);
+            } catch (uploadError) {
+                console.error('Error uploading image:', uploadError);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error uploading image'
+                });
+            }
+        }
+
         // Create new category
         const newCategory = new Category({
             name,
-            description,
-            image,
+            description: description || '',
+            image: imageUrl,
             parentCategory: parentCategory || null
         });
 
@@ -332,6 +352,14 @@ const createCategory = async (req, res) => {
         });
     } catch (error) {
         console.error('Error creating category:', error);
+        // If there's an error and image was uploaded, delete it
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (deleteError) {
+                console.error('Error deleting uploaded image:', deleteError);
+            }
+        }
         res.status(500).json({
             success: false,
             message: error.message
@@ -342,7 +370,8 @@ const createCategory = async (req, res) => {
 const createChildCategory = async (req, res) => {
     try {
         const { parentId } = req.params;
-        const { name, description, image } = req.body;
+        const { name, description } = req.body;
+        let imageUrl = null;
 
         // Validate required fields
         if (!name) {
@@ -379,11 +408,28 @@ const createChildCategory = async (req, res) => {
             }
         }
 
+        // Handle image upload if provided
+        if (req.file) {
+            try {
+                const result = await cloudinary.uploader.upload(req.file.path, {
+                    folder: 'categories',
+                });
+                imageUrl = result.secure_url;
+                console.log('Uploaded image URL:', imageUrl);
+            } catch (uploadError) {
+                console.error('Error uploading image:', uploadError);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error uploading image'
+                });
+            }
+        }
+
         // Create new child category
         const newCategory = new Category({
             name,
-            description,
-            image,
+            description: description || '',
+            image: imageUrl,
             parentCategory: parentId
         });
 
@@ -395,6 +441,142 @@ const createChildCategory = async (req, res) => {
         });
     } catch (error) {
         console.error('Error creating child category:', error);
+        // If there's an error and image was uploaded, delete it
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (deleteError) {
+                console.error('Error deleting uploaded image:', deleteError);
+            }
+        }
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+const updateCategory = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { name, description, parentCategory } = req.body;
+        let imageUrl;
+
+        // Validate categoryId
+        if (!categoryId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category ID is required'
+            });
+        }
+
+        // Find the category to update
+        const category = await Category.findById(categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Validate required fields
+        if (!name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category name is required'
+            });
+        }
+
+        // If parentCategory is provided, verify it exists and validate hierarchy
+        if (parentCategory) {
+            const parentExists = await Category.findById(parentCategory);
+            if (!parentExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Parent category not found'
+                });
+            }
+
+            // Check if trying to set parent to itself
+            if (parentCategory === categoryId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Category cannot be its own parent'
+                });
+            }
+
+            // Check if parent category already has a parent (max 2 levels)
+            if (parentExists.parentCategory) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot add more than 2 levels of categories'
+                });
+            }
+
+            // Check if this category has children and we're trying to make it a child
+            const hasChildren = await Category.exists({ parentCategory: categoryId });
+            if (hasChildren) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot move category with children to be a child category'
+                });
+            }
+        }
+
+        // Handle image update
+        if (req.file) {
+            // Delete old image from Cloudinary if it exists
+            if (category.image) {
+                try {
+                    const urlParts = category.image.split('/');
+                    const filename = urlParts[urlParts.length - 1];
+                    const publicId = filename.split('.')[0];
+                    await cloudinary.uploader.destroy(publicId);
+                } catch (error) {
+                    console.log('Error deleting old image from Cloudinary:', error);
+                }
+            }
+
+            // Upload new image
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: 'categories',
+            });
+            
+            imageUrl = result.secure_url;
+        }
+
+        // Update fields
+        category.name = name;
+        category.description = description || '';
+        if (parentCategory !== undefined) {
+            category.parentCategory = parentCategory || null;
+        }
+        
+        // Update image if new one was uploaded
+        if (imageUrl) {
+            category.image = imageUrl;
+        }
+
+        // Update timestamp
+        category.updateAt = Date.now();
+
+        const updatedCategory = await category.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Category updated successfully',
+            data: updatedCategory
+        });
+    } catch (error) {
+        console.error('Error updating category:', error);
+        // If there's an error and new image was uploaded, delete it
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+            } catch (deleteError) {
+                console.error('Error deleting uploaded image:', deleteError);
+            }
+        }
         res.status(500).json({
             success: false,
             message: error.message
@@ -432,6 +614,18 @@ const deleteCategory = async (req, res) => {
             });
         }
 
+        // Delete image from Cloudinary if it exists
+        if (category.image) {
+            try {
+                const urlParts = category.image.split('/');
+                const filename = urlParts[urlParts.length - 1];
+                const publicId = filename.split('.')[0];
+                await cloudinary.uploader.destroy(publicId);
+            } catch (error) {
+                console.log('Error deleting image from Cloudinary:', error);
+            }
+        }
+
         // Delete the category
         await Category.findByIdAndDelete(categoryId);
 
@@ -457,5 +651,6 @@ module.exports = {
     getChildCategoriesByParentId,
     createCategory,
     createChildCategory,
+    updateCategory,
     deleteCategory
 };
