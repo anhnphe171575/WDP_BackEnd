@@ -20,15 +20,18 @@ const OrderSchema = new Schema({
   status: {
     type: String,
     required: true,
+    emum: ['pending', 'processing', 'shipped', 'completed', 'returned', 'cancelled'],
+    default: 'pending'
   },
   paymentMethod: {
     type: String,
-    required: true
+    status: String
   },
   voucher: [{
     type: Schema.Types.ObjectId,
     ref: 'Voucher'
   }],
+  
   createAt: {
     type: Date,
     default: Date.now
