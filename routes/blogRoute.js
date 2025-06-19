@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/cloudinary.js');
 const verifyToken = require('../middleware/auth.js');
+const authorizeRoles = require('../middleware/authorization.js');
+const auth = require('../middleware/auth.js');
 const { 
     createBlog, 
     getAllBlogs, 
@@ -263,10 +265,10 @@ const {
  */
 
 // Create blog - POST /api/blogs
-router.post('/', upload.array('images', 5), createBlog);
+router.post('/',  upload.array('images', 5), auth, authorizeRoles(4), createBlog);
 
 // Get all blogs - GET /api/blogs
-router.get('/', getAllBlogs);
+router.get('/', auth, authorizeRoles(4), getAllBlogs);
 
 // Get single blog - GET /api/blogs/:id
 router.get('/:id', getBlog);
