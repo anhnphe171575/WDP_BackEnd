@@ -4,8 +4,11 @@ const OrderItem = require('../models/orderItem');
 const User = require('../models/userModel');
 const { Server } = require('socket.io');
 const Notification = require('../models/notificationModel');
-
-const Voucher = require('../models/voucher'); 
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require("dotenv").config();
+const transporter = require('../config/email');
+const Voucher = require('../models/voucher');
 const Product = require('../models/product')
 const ProductVariant = require('../models/productVariant')
 
@@ -178,7 +181,7 @@ exports.getOrderDetails = async (req, res) => {
 
         // Tìm order trước
         const order = await Order.findOne({ _id: orderId, userId }).lean();
-        
+
         if (!order) {
             return res.status(404).json({
                 success: false,
@@ -193,7 +196,7 @@ exports.getOrderDetails = async (req, res) => {
         const orderItems = await OrderItem.find({
             _id: { $in: orderItemIds }
         }).lean();
-        
+
         // Lấy danh sách productId và productVariantId
         const productIds = [];
         const productVariantIds = [];
@@ -201,12 +204,12 @@ exports.getOrderDetails = async (req, res) => {
             if (item.productId) productIds.push(item.productId);
             if (item.productVariant) productVariantIds.push(item.productVariant);
         });
-            
+
         // Lấy thông tin voucher
         const vouchers = await Voucher.find({
             _id: { $in: order.voucher || [] }
         }).lean();
-        
+
         // Tìm tất cả products
         const products = await Product.find({
             _id: { $in: productIds }
@@ -216,7 +219,7 @@ exports.getOrderDetails = async (req, res) => {
         const productVariants = await ProductVariant.find({
             _id: { $in: productVariantIds }
         }).populate('attribute').lean();
-        
+
         // Tạo product map
         const productMap = products.reduce((map, product) => {
             if (product && product._id) {
@@ -274,7 +277,7 @@ exports.getOrderDetails = async (req, res) => {
             OrderItems: order.OrderItems.map(orderItemId => {
                 // orderItemId là ObjectId trực tiếp
                 const orderItem = orderItemMap[orderItemId.toString()];
-                
+
                 if (orderItem) {
                     // Lấy product từ productMap
                     const product = productMap[orderItem.productId?.toString()];
@@ -328,40 +331,113 @@ exports.getOrderDetails = async (req, res) => {
 // Create new user
 exports.createUser = async (req, res) => {
     try {
-        const user = await User.create(req.body);
-        if (!user) {
+        const { name, email, password, phone, role, address } = req.body;
+
+        // Validate required fields
+        if (!name || !email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'User creation failed'
+                message: 'Vui lòng nhập đầy đủ thông tin bắt buộc'
             });
         }
-        user.save();
-        // 1. Gửi socket đến tất cả client
-        req.io.emit('notification', {
-            message: `User ${user.name} has registered successfully!`
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email đã được sử dụng'
+            });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Generate verification token
+        const verificationToken = jwt.sign(
+            { email },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Create new user
+        const newUser = new User({
+            name,
+            email,
+            password: hashedPassword,
+            phone,
+            role,
+            address,
+            verified: false,
+            verificationToken,
+            verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
         });
 
-        // 2. Lưu vào DB
-        const notification = new Notification({
-            message: `User ${user.name} has registered successfully!`,
-            userId: user._id,
-            type: 'user_registration',
-            title: 'New User Registration',
-            description: `User ${user.name} has registered successfully!`,
-            read: false
-        });
+        // Save user to database
+        await newUser.save();
 
-        await notification.save();
-        // Save the user to the database
+        // Send verification email
+        const emailSent = await sendVerificationEmail(email, verificationToken);
+        if (!emailSent) {
+            // If email sending fails, delete the user
+            await User.findByIdAndDelete(newUser._id);
+            return res.status(500).json({
+                success: false,
+                message: 'Lỗi khi gửi email xác thực'
+            });
+        }
+
+        // Send response
         res.status(201).json({
             success: true,
-            data: user
+            message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
+            user: {
+                id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                role: newUser.role
+            }
         });
     } catch (error) {
-        res.status(400).json({
+        console.error('Create user error:', error);
+        res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Lỗi server',
+            error: error.message
         });
+    }
+};
+const sendVerificationEmail = async (email, verificationToken) => {
+    // Tạo URL xác thực với đầy đủ thông tin
+    const verificationUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/auth/verify-email?token=${verificationToken}`;
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Verify your email',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #333;">Hello!</h1>
+            <p style="color: #666; line-height: 1.6;">Thank you for registering. Please click the button below to verify your email:</p>
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${verificationUrl}" 
+                 style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                Verify email
+              </a>
+            </div>
+            <p style="color: #666; line-height: 1.6;">The link will expire in 24 hours.</p>
+            <p style="color: #666; line-height: 1.6;">If you did not request this verification, please ignore this email.</p>
+          </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return true;
+    } catch (error) {
+        console.error('Error sending verification email:', error);
+        return false;
     }
 };
 
@@ -422,7 +498,7 @@ exports.getUserAddresses = async (req, res) => {
     try {
         const userId = req.user.id;
         const user = await User.findById(userId).select('address');
-        
+
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -497,7 +573,7 @@ exports.deleteAddress = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: user.address  
+            data: user.address
         });
     } catch (error) {
         res.status(500).json({

@@ -4,6 +4,7 @@ const Voucher = require('../models/voucher')
 const Product = require('../models/product')
 const ProductVariant = require('../models/productVariant')
 const Attribute = require('../models/attribute')
+const ImportBatch = require('../models/import_batches');
 
 // Create new order
 exports.createOrder = async (req, res) => {
@@ -85,19 +86,41 @@ exports.getOrderById = async (req, res) => {
 exports.updateOrder = async (req, res) => {
     try {
         const { status, paymentMethod, voucher } = req.body;
-        const order = await Order.findById(req.params.id);
 
+        if(status == 'cancelled') {
+            // Return stock for each product in the order
+            const order = await Order.findById(req.params.id).populate('OrderItems');
+            if (!order) {
+                return res.status(404).json({ message: 'Order not found' });
+            }
+            let orderItemsId = [];
+            for (const item of order.OrderItems) {
+                orderItemsId.push(item);
+            }
+            const orderItems = await OrderItem.find({ _id: { $in: orderItemsId } });
+            for (const item of orderItems) {
+                // Update stock for import_batches: cộng vào batch mới nhất của variant
+                if (item.productVariant) {
+                    // Tìm batch mới nhất của variant này
+                    const latestBatch = await ImportBatch.findOne({ variantId: item.productVariant })
+                        .sort({ importDate: -1 });
+                    if (latestBatch) {
+                        latestBatch.quantity += item.quantity;
+                        await latestBatch.save();
+                    }
+                }
+            }
+        }
+        const order = await Order.findById(req.params.id);
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
-
-        if (status) order.status = status;
-        if (paymentMethod) order.paymentMethod = paymentMethod;
-        if (voucher) order.voucher = voucher;
+        order.status = status || order.status;
+        order.paymentMethod = paymentMethod || order.paymentMethod;
+        order.voucher = voucher || order.voucher;
         order.updateAt = Date.now();
-
-        const updatedOrder = await order.save();
-        res.status(200).json(updatedOrder);
+        await order.save();
+        res.status(200).json(order);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
@@ -210,3 +233,66 @@ exports.getOrdersDashboard = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+// edit status of orderItem
+exports.editOrderItemStatus = async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const orderItemId = req.params.orderItemId;
+        // Lấy quantity từ body
+        const { quantity } = req.body;
+
+        // Find the order item
+        const orderItem = await OrderItem.findById(orderItemId);
+        if (!orderItem) {
+            return res.status(404).json({ message: 'Order item not found' });
+        }   
+        // Update the status
+        orderItem.status = 'returned';
+        if (quantity && Number(quantity) > 0) {        
+            // Update stock for import_batches: cộng vào batch mới nhất của variant
+            if (orderItem.productVariant) {
+                const latestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant })
+                    .sort({ importDate: -1 });
+                if (latestBatch) {
+                    latestBatch.quantity += Number(quantity);
+                    await latestBatch.save();
+                }
+            }
+        }
+        await orderItem.save();
+        res.status(200).json({ message: 'Order item status updated successfully', orderItem });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+// request return order item
+exports.requestReturnOrderItem = async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const orderItemId = req.params.orderItemId;
+        const { reason } = req.body;
+
+        // Validate input
+        if (!reason) {
+            return res.status(400).json({ message: 'Reason for return is required' });
+        }
+
+        // Find the order item
+        const orderItem = await OrderItem.findById(orderItemId);
+        if (!orderItem) {
+            return res.status(404).json({ message: 'Order item not found' });
+        }
+        // Check if the order item is already returned or return requested
+        if ( orderItem.status === 'returned-requested') {
+            return res.status(400).json({ message: 'Order item has already been returned or return requested' });
+        }
+        // Update the status to 'returned-requested'
+        orderItem.status = 'returned-requested';
+        orderItem.reason = reason;
+        orderItem.returnRequestedAt = Date.now();
+        await orderItem.save();
+        res.status(200).json({ message: 'Return request submitted successfully', orderItem });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}

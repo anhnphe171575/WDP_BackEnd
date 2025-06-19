@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+const addressSchema = new mongoose.Schema({
+  street: { type: String, required: true },
+  city: { type: String, required: true },
+  state: { type: String },
+  postalCode: { type: String, required: true },
+  country: { type: String, required: true, default: 'Vietnam' }
+}, { _id: true });
 
 const OrderSchema = new Schema({
   userId: {
@@ -31,7 +38,7 @@ const OrderSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Voucher'
   }],
-  
+  address: addressSchema,
   createAt: {
     type: Date,
     default: Date.now

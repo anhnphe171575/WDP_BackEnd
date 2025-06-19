@@ -119,7 +119,7 @@ router.delete('/:id', userController.deleteUser);
  *       201:
  *         description: Tạo thành công
  */
-router.post('/:id', userController.createUser);
+router.post('/', userController.createUser);
 
 /**
  * @swagger
