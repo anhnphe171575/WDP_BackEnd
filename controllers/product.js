@@ -74,6 +74,8 @@ const getTopSellingProducts = async (req, res) => {
             }
         ]);
 
+        console.log('Top products:', topProducts);
+
         // If no top-selling products found, get 5 most recent products
         if (topProducts.length === 0) {
             const recentProducts = await Product.aggregate([
@@ -124,6 +126,60 @@ const getTopSellingProducts = async (req, res) => {
         });
     }
 };
+
+const getProductsBySearch = async (req, res) => {
+    try {
+        const { search } = req.params;
+        if (!search || search.trim() === "") {
+            return res.status(400).json({
+                success: false,
+                message: "Search term is required"
+            });
+        }
+        // Tìm kiếm không phân biệt hoa thường, lấy cả variant và attribute
+        const products = await Product.find({
+            name: { $regex: search, $options: "i" }
+        })
+        .populate('category', 'name description parentCategory')
+        .lean();
+
+        // Lấy variants và attribute cho từng sản phẩm
+        const productIds = products.map(p => p._id);
+        const variants = await ProductVariant.find({ product_id: { $in: productIds } })
+            .populate({
+                path: 'attribute',
+                select: 'value description',
+                populate: {
+                    path: 'parentId',
+                    select: 'value'
+                }
+            })
+            .lean();
+
+        // Gắn variants vào từng product
+        const productMap = {};
+        products.forEach(p => { productMap[p._id.toString()] = { ...p, variants: [] }; });
+        variants.forEach(variant => {
+            const pid = variant.product_id.toString();
+            if (productMap[pid]) {
+                productMap[pid].variants.push(variant);
+            }
+        });
+
+        const result = Object.values(productMap);
+
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error searching products',
+            error: error.message
+        });
+    }
+}
 
 const getProductsByCategory = async (req, res) => {
     try {
@@ -215,6 +271,181 @@ const getProductsByCategory = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error getting products by category',
+            error: error.message
+        });
+    }
+};
+
+const getAllBestSellingProducts = async (req, res) => {
+    try {
+        // Lấy tất cả sản phẩm bán chạy nhất, không lọc theo category
+        const topProducts = await Order.aggregate([
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems.orderItem_id',
+                    foreignField: '_id',
+                    as: 'orderItemDetails'
+                }
+            },
+            { $unwind: '$orderItemDetails' },
+            {
+                $group: {
+                    _id: '$orderItemDetails.product',
+                    totalSold: { $sum: '$orderItemDetails.quantity' }
+                }
+            },
+            { $sort: { totalSold: -1 } },
+            { $limit: 5 },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            { $unwind: '$productDetails' },
+            // Thêm lookup để lấy thông tin categories
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'productDetails.category',
+                    foreignField: '_id',
+                    as: 'categories'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'productvariants',
+                    localField: '_id',
+                    foreignField: 'product_id',
+                    as: 'variants'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: '$productDetails.name',
+                    description: '$productDetails.description',
+                    brand: '$productDetails.brand',
+                    totalSold: 1,
+                    minSellPrice: { $min: '$variants.sellPrice' },
+                    images: {
+                        $reduce: {
+                            input: '$variants.images',
+                            initialValue: [],
+                            in: { $concatArrays: ['$$value', '$$this'] }
+                        }
+                    },
+                    categories: {
+                        $map: {
+                            input: '$categories',
+                            as: 'cat',
+                            in: {
+                                _id: '$$cat._id',
+                                name: '$$cat.name',
+                                description: '$$cat.description'
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+
+        console.log('Top products:', topProducts);
+
+        if (topProducts.length === 0) {
+            // Nếu không có sản phẩm nào trong order, lấy 5 sản phẩm có tổng quantity lớn nhất
+            const productsWithQuantity = await Product.aggregate([
+                {
+                    $lookup: {
+                        from: 'productvariants',
+                        localField: '_id',
+                        foreignField: 'product_id',
+                        as: 'variants'
+                    }
+                },
+                { $unwind: '$variants' },
+                {
+                    $lookup: {
+                        from: 'importbatches',
+                        localField: 'variants._id',
+                        foreignField: 'variantId',
+                        as: 'importBatches'
+                    }
+                },
+                {
+                    $addFields: {
+                        'variants.totalQuantity': { $sum: '$importBatches.quantity' }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$_id',
+                        name: { $first: '$name' },
+                        description: { $first: '$description' },
+                        brand: { $first: '$brand' },
+                        category: { $first: '$category' },
+                        variants: { $push: '$variants' },
+                        totalQuantity: { $sum: '$variants.totalQuantity' }
+                    }
+                },
+                { $sort: { totalQuantity: -1 } },
+                { $limit: 5 },
+                // Thêm lookup để lấy thông tin categories
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'categories'
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        name: 1,
+                        description: 1,
+                        brand: 1,
+                        minSellPrice: { $min: '$variants.sellPrice' },
+                        images: {
+                            $reduce: {
+                                input: '$variants.images',
+                                initialValue: [],
+                                in: { $concatArrays: ['$$value', '$$this'] }
+                            }
+                        },
+                        totalQuantity: 1,
+                        categories: {
+                            $map: {
+                                input: '$categories',
+                                as: 'cat',
+                                in: {
+                                    _id: '$$cat._id',
+                                    name: '$$cat.name',
+                                    description: '$$cat.description'
+                                }
+                            }
+                        }
+                    }
+                }
+            ]);
+            return res.status(200).json({
+                success: true,
+                data: productsWithQuantity
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: topProducts
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error getting best selling products',
             error: error.message
         });
     }
@@ -374,7 +605,9 @@ const getProductById = async (req, res) => {
                             sellPrice: '$variants.sellPrice',
                             totalQuantity: '$variants.totalQuantity',
                             importBatches: '$variants.importBatches',
-                            attributes: '$variants.attributeDetails'
+                            attribute: '$variants.attribute',
+                            attributeDetails: '$variants.attributeDetails',
+                            attributes: '$variants.attributes'
                         }
                     }
                 }
@@ -474,6 +707,12 @@ const getProductById = async (req, res) => {
                     as: 'variants.attributeDetails'
                 }
             },
+            // Gán lại attributes cho variant
+            {
+                $addFields: {
+                    'variants.attributes': '$variants.attributeDetails'
+                }
+            },
             // Group back by product
             {
                 $group: {
@@ -494,7 +733,9 @@ const getProductById = async (req, res) => {
                             sellPrice: '$variants.sellPrice',
                             totalQuantity: '$variants.totalQuantity',
                             importBatches: '$variants.importBatches',
-                            attributes: '$variants.attributeDetails'
+                            attribute: '$variants.attribute',
+                            attributeDetails: '$variants.attributeDetails',
+                            attributes: '$variants.attributes'
                         }
                     }
                 }
@@ -1303,6 +1544,8 @@ const deleteImportBatch = async (req, res) => {
     }
 };
 
+
+
 module.exports = {
     getTopSellingProducts,
     getProductsByCategory,
@@ -1321,5 +1564,7 @@ module.exports = {
     getImportBatchesByVariantId,
     createImportBatch,
     updateImportBatch,
-    deleteImportBatch
+    deleteImportBatch,
+    getAllBestSellingProducts,
+    getProductsBySearch
 };
