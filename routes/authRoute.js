@@ -28,8 +28,9 @@ router.post('/login', authController.login);
 router.post('/register', authController.register);
 router.get('/verify-email', authController.VerifyEmail);
 router.get('/myprofile', verifyToken, authController.UserProfile);
-
 router.post('/google', authController.googleAuth);
+router.post('/changepassword', verifyToken, authController.changePassword);
+
 
 module.exports = router;
   
