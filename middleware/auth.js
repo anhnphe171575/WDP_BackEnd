@@ -22,7 +22,6 @@ function verifyToken(req, res, next) {
     }
     // Lưu thông tin user decoded vào req để route tiếp theo dùng
     req.user = decoded;
-    console.log(req.user);
     next();
   });
 }

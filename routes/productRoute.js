@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch } = require('../controllers/product');
+const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch } = require('../controllers/product');
 const { upload } = require('../config/cloudinary');
 
 /**
@@ -13,6 +13,7 @@ const { upload } = require('../config/cloudinary');
  *         description: Thành công
  */
 router.get('/top-selling', getTopSellingProducts);
+router.get('/search/:search', getProductsBySearch);
 router.get('/',getAllProducts);
 router.get('/product-variant/:productId',getProductVariantsByProductId);
 router.get('/child-attributes/:productId',getChildAttributesByProductId);
@@ -26,8 +27,7 @@ router.delete('/:productId',deleteProduct)
 router.get('/productsByCategory/:categoryId', getProductsByCategory);
 router.get('/productDetailsByCategory/:categoryId', getProductDetailsByCategory);
 router.get('/productById/:id', getProductById);
-
-// Import Batch Routes
+router.get('/best-selling', getAllBestSellingProducts);
 router.get('/import-batches/:variantId', getImportBatchesByVariantId);
 router.post('/import-batches/:variantId', createImportBatch);
 router.put('/import-batches/:batchId', updateImportBatch);

@@ -5,6 +5,7 @@ const Product = require('../models/product');
 const Attribute = require('../models/attribute');
 const { cloudinary } = require('../config/cloudinary');
 const fs = require('fs');
+const path = require('path');
 
 const getAllCategoriesPopular = async (req, res) => {
     try {
@@ -642,6 +643,26 @@ const deleteCategory = async (req, res) => {
     }
 };
 
+// Lấy tất cả categories và xuất ra file JSON
+const exportAllCategoriesToJson = async (req, res) => {
+    try {
+        const categories = await Category.find().lean();
+        const filePath = path.join(__dirname, '../categories.json');
+        fs.writeFileSync(filePath, JSON.stringify(categories, null, 2), 'utf-8');
+        res.status(200).json({
+            success: true,
+            message: 'Exported all categories to categories.json',
+            filePath
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error exporting categories',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllCategoriesPopular,
     getParentCategories,
@@ -652,5 +673,6 @@ module.exports = {
     createCategory,
     createChildCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    exportAllCategoriesToJson
 };

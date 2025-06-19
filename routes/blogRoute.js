@@ -267,7 +267,6 @@ const {
 // Create blog - POST /api/blogs
 router.post('/',  upload.array('images', 5), auth, authorizeRoles(4), createBlog);
 
-// Get all blogs - GET /api/blogs
 router.get('/', auth, authorizeRoles(4), getAllBlogs);
 
 // Get single blog - GET /api/blogs/:id

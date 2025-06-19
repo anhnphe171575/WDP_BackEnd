@@ -9,7 +9,7 @@ const addToCart = async (req, res) => {
     try {
         const userId = req.user.id;
         const { productId, productVariantId, quantity } = req.body;
-        console.log(req.body);
+        
 
         // Validate input
         if (!userId || !productId  || !quantity) {
@@ -45,9 +45,9 @@ const addToCart = async (req, res) => {
         const existingCartItem = await CartItem.findOne({
             productId: productId,
             productVariantId: productVariantId,
-            _id: { $in: cart.cartItems.map(item => item.cartItem_id) }
+      
         });
-
+        console.log(existingCartItem);
         if (existingCartItem) {
             // Update quantity if product variant already in cart
             existingCartItem.quantity += quantity;
