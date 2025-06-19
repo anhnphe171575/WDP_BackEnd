@@ -1296,7 +1296,7 @@ const deleteProductVariant = async (req, res) => {
 const updateProductVariant = async (req, res) => {
     try {
         const variantId = req.params.variantId;
-        const { images, attributes, sellPrice } = req.body;
+        let { attributes, sellPrice } = req.body;
 
         // Validate variant exists
         const existingVariant = await ProductVariant.findById(variantId);
@@ -1323,10 +1323,28 @@ const updateProductVariant = async (req, res) => {
             existingVariant.attribute = attributeIds;
         }
 
-        // Update other fields if provided
-        if (images) {
+        // --- XỬ LÝ ẢNH CŨ VÀ ẢNH MỚI ---
+        let images = [];
+        // 1. Ảnh cũ (url) gửi qua existingImages (có thể là string hoặc mảng)
+        if (req.body.existingImages) {
+            if (Array.isArray(req.body.existingImages)) {
+                images = req.body.existingImages.map(url => ({ url }));
+            } else if (typeof req.body.existingImages === 'string') {
+                images = [{ url: req.body.existingImages }];
+            }
+        }
+        // 2. Ảnh mới (file upload)
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const result = await cloudinary.uploader.upload(file.path, { folder: 'product-variants' });
+                images.push({ url: result.secure_url });
+            }
+        }
+        if (images.length > 0) {
             existingVariant.images = images;
         }
+
+        // Update sellPrice nếu có
         if (sellPrice !== undefined) {
             if (sellPrice < 0) {
                 return res.status(400).json({

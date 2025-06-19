@@ -19,7 +19,7 @@ router.get('/product-variant/:productId',getProductVariantsByProductId);
 router.get('/child-attributes/:productId',getChildAttributesByProductId);
 router.get('/child-attributes/parent/:parentId', getChildAttributesByParentId);
 router.post('/:productId/variant', upload.array('images'), createProductVariant);
-router.put('/variant/:variantId', updateProductVariant);
+router.put('/variant/:variantId', upload.array('images'), updateProductVariant);
 router.delete('/variant/:variantId', deleteProductVariant);
 router.post('/',createProduct);
 router.put('/:productId',updateProduct);
