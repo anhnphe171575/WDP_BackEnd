@@ -547,3 +547,47 @@ exports.updateAddress = async (req, res) => {
     }
 };
 
+exports.updateProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { name, phone, dob, address } = req.body;
+        // Chỉ lấy các trường hợp lệ
+        const updateFields = {};
+        if (name !== undefined) updateFields.name = name;
+        if (phone !== undefined) updateFields.phone = phone;
+        if (dob !== undefined) updateFields.dob = dob;
+        if (address !== undefined) updateFields.address = address;
+
+        if (Object.keys(updateFields).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không có trường nào để cập nhật'
+            });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: updateFields },
+            { new: true }
+        ).select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy người dùng'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Cập nhật thông tin cá nhân thành công',
+            data: user
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
