@@ -25,12 +25,13 @@ const OrderSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    required: true
+    status: String
   },
   voucher: [{
     type: Schema.Types.ObjectId,
     ref: 'Voucher'
   }],
+  
   createAt: {
     type: Date,
     default: Date.now

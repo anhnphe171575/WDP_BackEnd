@@ -12,7 +12,7 @@ const addToCart = async (req, res) => {
         console.log(req.body);
 
         // Validate input
-        if (!userId || !productId || !productVariantId || !quantity) {
+        if (!userId || !productId  || !quantity) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: userId, productId, productVariantId, quantity'
@@ -33,12 +33,7 @@ const addToCart = async (req, res) => {
             _id: productVariantId,
             product_id: productId
         });
-        if (!productVariant) {
-            return res.status(404).json({
-                success: false,
-                message: 'Product variant not found'
-            });
-        }
+      
 
         // Find or create cart for user
         let cart = await Cart.findOne({ userId });
@@ -67,7 +62,7 @@ const addToCart = async (req, res) => {
             await newCartItem.save();
             
             // Add cart item to cart
-            cart.cartItems.push({ cartItem_id: newCartItem._id });
+            cart.cartItems.push(newCartItem._id);
         }
 
         await cart.save();
@@ -75,7 +70,7 @@ const addToCart = async (req, res) => {
         // Populate cart items with product and variant details
         const populatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -145,7 +140,7 @@ const updateCart = async (req, res) => {
 
         // Verify cart item belongs to user's cart
         const isItemInCart = cart.cartItems.some(item => 
-            item.cartItem_id.toString() === cartItemId
+            item.toString() === cartItemId
         );
 
         if (!isItemInCart) {
@@ -162,7 +157,7 @@ const updateCart = async (req, res) => {
         // Get updated cart with populated data
         const updatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: {
                     path: 'productId',
                     model: 'Product'
@@ -188,7 +183,7 @@ const updateCart = async (req, res) => {
 const getCart = async (req, res) => {
     try {
         const userId = req.user.id;
-          console.log(userId)
+
         if (!userId) {
             return res.status(400).json({
                 success: false,
@@ -199,7 +194,7 @@ const getCart = async (req, res) => {
         // Find user's cart with populated data
         const cart = await Cart.findOne({ userId })
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -226,9 +221,8 @@ const getCart = async (req, res) => {
             });
         }
 
-        const variantIds = cart.cartItems.map(item => item.cartItem_id.productVariantId._id);
-                  console.log(variantIds)
-
+        // Get import batches for all variants in cart
+        const variantIds = cart.cartItems.map(item => item.productVariantId._id);
         const importBatches = await ImportBatch.aggregate([
             {
                 $match: {
@@ -265,8 +259,7 @@ const getCart = async (req, res) => {
             userId: cart.userId,
             createdAt: cart.createdAt,
             updatedAt: cart.updatedAt,
-            cartItems: cart.cartItems.map(item => {
-                const cartItem = item.cartItem_id;
+            cartItems: cart.cartItems.map(cartItem => {
                 const variantId = cartItem.productVariantId._id.toString();
                 const importBatchData = importBatchMap[variantId] || { totalQuantity: 0, batches: [] };
 
@@ -279,19 +272,21 @@ const getCart = async (req, res) => {
                         description: cartItem.productId.description,
                         price: cartItem.productId.price,
                         images: cartItem.productId.images,
-                        selectedVariant: {
-                            _id: cartItem.productVariantId._id,
-                            sku: cartItem.productVariantId.sku,
-                            price: cartItem.productVariantId.sellPrice,
-                            stock: cartItem.productVariantId.stock,
-                            images: cartItem.productVariantId.images,
-                            totalImportQuantity: importBatchData.totalQuantity,
-                            importBatches: importBatchData.batches,
-                            attributes: cartItem.productVariantId.attribute.map(attr => ({
-                                value: attr.value,
-                                description: attr.description
-                            }))
-                        },
+                        ...(cartItem.productVariantId && {
+                            selectedVariant: {
+                                _id: cartItem.productVariantId._id,
+                                sku: cartItem.productVariantId.sku,
+                                price: cartItem.productVariantId.sellPrice,
+                                stock: cartItem.productVariantId.stock,
+                                images: cartItem.productVariantId.images,
+                                totalImportQuantity: importBatchData.totalQuantity,
+                                importBatches: importBatchData.batches,
+                                attributes: cartItem.productVariantId.attribute.map(attr => ({
+                                    value: attr.value,
+                                    description: attr.description
+                                }))
+                            }
+                        }),
                         variants: cartItem.productId.variants
                     }
                 };
@@ -337,7 +332,7 @@ const getLatestCartItem = async (req, res) => {
         // Find user's cart with populated data
         const cart = await Cart.findOne({ userId })
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: [
                     {
                         path: 'productId',
@@ -365,7 +360,7 @@ const getLatestCartItem = async (req, res) => {
         }
 
         // Get the last added cart item (last in the array)
-        const lastCartItem = cart.cartItems[cart.cartItems.length - 1].cartItem_id;
+        const lastCartItem = cart.cartItems[cart.cartItems.length - 1];
         
         // Transform the cart item data
         const latestItem = {
@@ -377,17 +372,19 @@ const getLatestCartItem = async (req, res) => {
                 description: lastCartItem.productId.description,
                 price: lastCartItem.productId.price,
                 images: lastCartItem.productId.images,
-                selectedVariant: {
-                    _id: lastCartItem.productVariantId._id,
-                    sku: lastCartItem.productVariantId.sku,
-                    price: lastCartItem.productVariantId.sellPrice,
-                    stock: lastCartItem.productVariantId.stock,
-                    images: lastCartItem.productVariantId.images,
-                    attributes: lastCartItem.productVariantId.attribute.map(attr => ({
-                        value: attr.value,
-                        description: attr.description
-                    }))
-                }
+                ...(lastCartItem.productVariantId && {
+                    selectedVariant: {
+                        _id: lastCartItem.productVariantId._id,
+                        sku: lastCartItem.productVariantId.sku,
+                        price: lastCartItem.productVariantId.sellPrice,
+                        stock: lastCartItem.productVariantId.stock,
+                        images: lastCartItem.productVariantId.images,
+                        attributes: lastCartItem.productVariantId.attribute.map(attr => ({
+                            value: attr.value,
+                            description: attr.description
+                        }))
+                    }
+                })
             }
         };
 
@@ -439,7 +436,7 @@ const deleteCartItem = async (req, res) => {
 
         // Verify cart item belongs to user's cart
         const isItemInCart = cart.cartItems.some(item => 
-            item.cartItem_id.toString() === cartItemId
+            item.toString() === cartItemId
         );
 
         if (!isItemInCart) {
@@ -451,7 +448,7 @@ const deleteCartItem = async (req, res) => {
 
         // Remove cart item from cart
         cart.cartItems = cart.cartItems.filter(item => 
-            item.cartItem_id.toString() !== cartItemId
+            item.toString() !== cartItemId
         );
         await cart.save();
 
@@ -461,7 +458,7 @@ const deleteCartItem = async (req, res) => {
         // Get updated cart with populated data
         const updatedCart = await Cart.findById(cart._id)
             .populate({
-                path: 'cartItems.cartItem_id',
+                path: 'cartItems',
                 populate: {
                     path: 'productId',
                     model: 'Product'

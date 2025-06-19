@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const Attribute = require('../models/attribute'); // adjust path as needed
 const Category = require('../models/category');
 const ProductVariant = require('../models/productVariant');
-const cloudinary = require('../config/cloudinary');
+const {cloudinary} = require('../config/cloudinary');
 
 // Get top 5 best-selling products or 5 most recent products if no sales
 const getTopSellingProducts = async (req, res) => {
@@ -945,26 +945,15 @@ const getChildAttributesByParentId = async (req, res) => {
 const createProductVariant = async (req, res) => {
     try {
         const productId = req.params.productId;
-        let { images, attributes, sellPrice } = req.body;
+        let { attributes, sellPrice } = req.body;
 
-        // Nếu nhận qua multipart/form-data, xử lý file ảnh
-        let imageUrls = [];
+        // Xử lý file ảnh
+        let images = [];
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 const result = await cloudinary.uploader.upload(file.path, { folder: 'product-variants' });
-                imageUrls.push({ url: result.secure_url });
+                images.push({ url: result.secure_url });
             }
-        } else if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, { folder: 'product-variants' });
-            imageUrls.push({ url: result.secure_url });
-        } else if (images && typeof images === 'string') {
-            // Nếu images là chuỗi json
-            try {
-                images = JSON.parse(images);
-            } catch {}
-        }
-        if (imageUrls.length > 0) {
-            images = imageUrls;
         }
 
         // Validate product exists
@@ -978,15 +967,27 @@ const createProductVariant = async (req, res) => {
 
         // Validate attributes
         const attributeIds = [];
-        for (const attrId of attributes) {
-            const attr = await Attribute.findById(attrId);
+        if (Array.isArray(attributes)) {
+            for (const attrId of attributes) {
+                const attr = await Attribute.findById(attrId);
+                if (!attr) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Attribute with ID ${attrId} not found`
+                    });
+                }
+                attributeIds.push(attrId);
+            }
+        } else if (attributes) {
+            // Trường hợp chỉ có 1 attribute (không phải mảng)
+            const attr = await Attribute.findById(attributes);
             if (!attr) {
                 return res.status(400).json({
                     success: false,
-                    message: `Attribute with ID ${attrId} not found`
+                    message: `Attribute with ID ${attributes} not found`
                 });
             }
-            attributeIds.push(attrId);
+            attributeIds.push(attributes);
         }
 
         // Create new variant

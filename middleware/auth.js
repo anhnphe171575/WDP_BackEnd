@@ -11,7 +11,6 @@ function verifyToken(req, res, next) {
 
   // Tách token khỏi "Bearer "
   const token = authHeader.split(' ')[1];
-  console.log(token);
   if (!token) {
     return res.status(401).json({ message: 'Token không hợp lệ' });
   }
@@ -23,6 +22,7 @@ function verifyToken(req, res, next) {
     }
     // Lưu thông tin user decoded vào req để route tiếp theo dùng
     req.user = decoded;
+    console.log(req.user);
     next();
   });
 }
