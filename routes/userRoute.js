@@ -115,7 +115,7 @@ router.get('/:id',verifyToken, userController.getUserById);
  *       201:
  *         description: Tạo thành công
  */
-router.post('/:id', userController.createUser);
+router.post('/', userController.createUser);
 
 /**
  * @swagger
