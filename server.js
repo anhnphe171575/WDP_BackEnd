@@ -23,6 +23,7 @@ const { setupSocket } = require('./config/socket.io');  // Import socket.io setu
 const cartRoute = require('./routes/cartRoute');
 const reviewRoute = require('./routes/reviewRoute');
 const paymentRoute = require('./routes/paymentRoute');
+const messageRoute = require('./routes/messageRoute');
 
 const app = express();
 const server = http.createServer(app);
@@ -74,6 +75,7 @@ app.use('/api/orders',orderRoute)
 app.use('/api/cart', cartRoute);
 app.use('/api/reviews', reviewRoute);
 app.use('/api/payment',paymentRoute);
+app.use('/api/messages', messageRoute);
 const PORT = 5000;
 server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

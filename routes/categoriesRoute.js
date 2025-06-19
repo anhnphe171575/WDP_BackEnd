@@ -171,4 +171,15 @@ router.put('/:categoryId', upload.single('image'), updateCategory);
  */
 router.delete('/:categoryId', deleteCategory);
 
+/**
+ * @swagger
+ * /categories/export-json:
+ *   get:
+ *     summary: Export all categories to JSON file
+ *     responses:
+ *       200:
+ *         description: Exported successfully
+ */
+router.get('/export-json', require('../controllers/categories').exportAllCategoriesToJson);
+
 module.exports = router;

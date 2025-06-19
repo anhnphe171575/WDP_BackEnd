@@ -265,18 +265,17 @@ const {
  */
 
 // Create blog - POST /api/blogs
-router.post('/',  upload.array('images', 5), auth, authorizeRoles(4), createBlog);
+router.post('/',  upload.array('images', 5) , createBlog);
 
-// Get all blogs - GET /api/blogs
-router.get('/', auth, authorizeRoles(4), getAllBlogs);
+router.get('/', getAllBlogs);
 
-// Get single blog - GET /api/blogs/:id
+
 router.get('/:id', getBlog);
 
-// Update blog - PUT /api/blogs/:id
+
 router.put('/:id', upload.array('images', 5), updateBlog);
 
-// Delete blog - DELETE /api/blogs/:id
+
 router.delete('/:id', verifyToken, deleteBlog);
 
 module.exports = router;

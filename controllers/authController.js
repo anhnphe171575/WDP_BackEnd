@@ -2,7 +2,7 @@ const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
-const { MailForgotPass } = require("../services/sendMail");
+const { MailForgotPass, MailPasswordChanged } = require("../services/sendMail");
 const crypto = require("crypto");
 require("dotenv").config();
 const cookieParser = require('cookie-parser');
@@ -11,8 +11,8 @@ const transporter = require('../config/email');
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  'postmessage' // This is required for the token exchange
-);
+  'postmessage' 
+);  
 
 exports.login = async (req, res) => {
   try {
@@ -649,10 +649,12 @@ exports.UserProfile = async(req,res) =>{
                 id: user._id,
                 name: user.name,
                 email: user.email,
+                birthday: user.dob,
                 phone: user.phone,
                 role: user.role,
                 avatar: user.avatar,
                 verified: user.verified,
+                address: user.address,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             }
@@ -665,4 +667,86 @@ exports.UserProfile = async(req,res) =>{
             error: error.message
         });
     }
+}
+
+exports.changePassword = async(req,res) =>{
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới'
+      });
+    }
+
+    // Validate new password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu hiện tại không đúng'
+      });
+    }
+
+    // Check if new password is same as current password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới không được trùng với mật khẩu hiện tại'
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    user.password = hashedNewPassword;
+    await user.save();
+
+    // Gửi email thông báo đổi mật khẩu thành công
+    try {
+      await MailPasswordChanged({
+        name: user.name,
+        email: user.email
+      });
+    } catch (emailError) {
+      console.error('Lỗi khi gửi email thông báo đổi mật khẩu:', emailError);
+      // Không throw error vì đổi mật khẩu đã thành công, chỉ log lỗi email
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Thay đổi mật khẩu thành công'
+    });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
 }
