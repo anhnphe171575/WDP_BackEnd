@@ -179,4 +179,98 @@ router.put('/:id', orderController.updateOrder);
  */
 router.delete('/:id', orderController.deleteOrder);
 
+// edit orderItem status
+
+/**
+ * @swagger
+ * /api/orders/{id}/orderItem/{orderItemId}:
+ *   put:
+ *     summary: Cập nhật trạng thái của một order item trong đơn hàng
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của đơn hàng
+ *       - in: path
+ *         name: orderItemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của order item
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 description: Trạng thái mới của order item
+ *     responses:
+ *       200:
+ *         description: Cập nhật trạng thái order item thành công
+ *       404:
+ *         description: Không tìm thấy đơn hàng hoặc order item
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ */
+router.put('/:id/orderItem/:orderItemId/returned', orderController.editOrderItemStatus);
+
+// request return order item
+/**
+ * @swagger
+ * /api/orders/{id}/orderItem/{orderItemId}/request-return:
+ *   put:
+ *     summary: Yêu cầu trả hàng cho một order item trong đơn hàng
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của đơn hàng
+ *       - in: path
+ *         name: orderItemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của order item
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Lý do trả hàng
+ *             required:
+ *               - reason
+ *     responses:
+ *       200:
+ *         description: Gửi yêu cầu trả hàng thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 orderItem:
+ *                   $ref: '#/components/schemas/OrderItem'
+ *       400:
+ *         description: Lý do trả hàng thiếu hoặc order item đã được trả/trả lại trước đó
+ *       404:
+ *         description: Không tìm thấy order item
+ *       500:
+ *         description: Lỗi server
+ */
+router.put('/:id/orderItem/:orderItemId/request-return', orderController.requestReturnOrderItem);
+
 module.exports = router;
