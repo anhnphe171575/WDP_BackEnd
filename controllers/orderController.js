@@ -271,7 +271,6 @@ exports.requestReturnOrderItem = async (req, res) => {
         const orderId = req.params.id;
         const orderItemId = req.params.orderItemId;
         const { reason } = req.body;
-
         // Validate input
         if (!reason) {
             return res.status(400).json({ message: 'Reason for return is required' });
@@ -294,5 +293,44 @@ exports.requestReturnOrderItem = async (req, res) => {
         res.status(200).json({ message: 'Return request submitted successfully', orderItem });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+}
+exports.updateBulkStatus= async(req, res)=>{
+    try {
+        const { orderIds, status } = req.body;
+
+        if (!orderIds || !status || !Array.isArray(orderIds) || orderIds.length === 0) {
+            return res.status(400).json({ message: 'Yêu cầu không hợp lệ, vui lòng cung cấp orderIds và status.' });
+        }
+        
+
+        if (status === 'cancelled') {
+            const orders = await Order.find({ _id: { $in: orderIds } }).populate('OrderItems');
+
+            for (const order of orders) {
+                // Chỉ xử lý các đơn hàng chưa bị hủy
+                if (order.status !== 'cancelled') {
+                    for (const item of order.OrderItems) {
+                        if (item.productVariant) {
+                            const latestBatch = await ImportBatch.findOne({ variantId: item.productVariant })
+                                .sort({ importDate: -1 });
+                            if (latestBatch) {
+                                latestBatch.quantity += item.quantity;
+                                await latestBatch.save();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const result = await Order.updateMany(
+            { _id: { $in: orderIds } },
+            { $set: { status: status, updateAt: Date.now() } }
+        );
+
+        res.status(200).json({ message: `Đã cập nhật ${result.modifiedCount} đơn hàng thành công.` });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
     }
 }

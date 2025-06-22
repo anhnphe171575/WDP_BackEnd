@@ -93,6 +93,37 @@ router.get('/', orderController.getAllOrders);
 
 /**
  * @swagger
+ * /api/orders/bulk-update-status:
+ *   put:
+ *     summary: Cập nhật trạng thái hàng loạt cho đơn hàng
+ *     tags: [Orders]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Danh sách ID của các đơn hàng cần cập nhật
+ *               status:
+ *                 type: string
+ *                 description: Trạng thái mới cần cập nhật cho các đơn hàng
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ *       500:
+ *         description: Lỗi server
+ */
+router.put('/bulk-update-status', orderController.updateBulkStatus);
+
+/**
+ * @swagger
  * /api/orders/{id}:
  *   get:
  *     summary: Lấy thông tin đơn hàng theo ID
