@@ -1186,7 +1186,7 @@ const getChildAttributesByParentId = async (req, res) => {
 const createProductVariant = async (req, res) => {
     try {
         const productId = req.params.productId;
-        let { attributes, sellPrice } = req.body;
+        let { attributes } = req.body;
 
         // Xử lý file ảnh
         let images = [];
@@ -1235,8 +1235,7 @@ const createProductVariant = async (req, res) => {
         const productVariant = new ProductVariant({
             product_id: productId,
             images,
-            attribute: attributeIds,
-            sellPrice
+            attribute: attributeIds
         });
 
         await productVariant.save();
