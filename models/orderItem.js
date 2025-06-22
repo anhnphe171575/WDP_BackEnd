@@ -7,7 +7,7 @@ const orderItemSchema = new mongoose.Schema({
     ref: 'Product',
     required: true
   },
-  productVariant:{
+  productVariant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductVariant',
     required: true
@@ -20,6 +20,23 @@ const orderItemSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  status: {
+    type: String,
+    enum: ['completed', 'returned-requested', 'returned'],
+    default: 'completed'
+  },
+  reason: {
+    type: String,
+    default: ''
+  },
+  returnQuantity: {
+    type: Number,
+    default: 0
+  },
+  
+  returnRequestedAt: {type: Date, default: Date.now()},
+  returnedAt: { type: Date, default: Date.now() },
+}, {
 });
 
 module.exports = mongoose.model('OrderItem', orderItemSchema);

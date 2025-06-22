@@ -90,7 +90,11 @@ router.post('/addresses', verifyToken, userController.addAddress);
 
 router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress);
 
-router.get('/:id',verifyToken, userController.getUserById);
+router.put('/edit-profile', verifyToken, userController.updateProfile);
+
+router.put('/:id', userController.updateUser);
+router.get('/:id', verifyToken, userController.getUserById);
+router.delete('/:id', userController.deleteUser);
 
 /**
  * @swagger
@@ -115,20 +119,16 @@ router.get('/:id',verifyToken, userController.getUserById);
  *       201:
  *         description: Tạo thành công
  */
-router.post('/:id', userController.createUser);
+router.post('/', userController.createUser);
 
 /**
  * @swagger
- * /api/users/{id}:
+ * /api/users/profile:
  *   put:
- *     summary: Cập nhật thông tin người dùng
+ *     summary: Cập nhật thông tin cá nhân
  *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -136,36 +136,52 @@ router.post('/:id', userController.createUser);
  *           schema:
  *             type: object
  *             properties:
- *               username:
+ *               name:
  *                 type: string
- *               email:
+ *                 description: Họ và tên mới
+ *               phone:
  *                 type: string
- *               password:
+ *                 description: Số điện thoại mới
+ *               dob:
  *                 type: string
+ *                 format: date
+ *                 description: Ngày sinh mới (YYYY-MM-DD)
+ *               address:
+ *                 type: array
+ *                 description: Danh sách địa chỉ mới (ghi đè toàn bộ)
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     street:
+ *                       type: string
+ *                     city:
+ *                       type: string
+ *                     state:
+ *                       type: string
+ *                     postalCode:
+ *                       type: string
+ *                     country:
+ *                       type: string
  *     responses:
  *       200:
  *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Lỗi dữ liệu đầu vào hoặc không có trường nào để cập nhật
+ *       401:
+ *         description: Không có hoặc thiếu token xác thực
+ *       404:
+ *         description: Không tìm thấy người dùng
  */
-router.put('/:id', userController.updateUser);
-
-/**
- * @swagger
- * /api/users/{id}:
- *   delete:
- *     summary: Xóa người dùng theo ID
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: ID của người dùng
- *     responses:
- *       200:
- *         description: Xóa thành công
- */
-router.delete('/:id', userController.deleteUser);
-
 
 module.exports = router;

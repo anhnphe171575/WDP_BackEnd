@@ -649,10 +649,12 @@ exports.UserProfile = async(req,res) =>{
                 id: user._id,
                 name: user.name,
                 email: user.email,
+                birthday: user.dob,
                 phone: user.phone,
                 role: user.role,
                 avatar: user.avatar,
                 verified: user.verified,
+                address: user.address,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             }
