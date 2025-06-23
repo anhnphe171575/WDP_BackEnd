@@ -22,20 +22,25 @@ const orderItemSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['completed', 'returned-requested', 'returned'],
+    enum: ['completed', 'returned-requested', 'returned','cancelled-requested'],
     default: 'completed'
   },
   reason: {
     type: String,
     default: ''
   },
-  returnQuantity: {
+  returnRequestedQuantity: {
     type: Number,
     default: 0
   },
   
-  returnRequestedAt: {type: Date, default: Date.now()},
-  returnedAt: { type: Date, default: Date.now() },
+  returnRequestedAt: {type: Date},
+  returnedAt: { type: Date },
+  cancelRequestedQuantity: {
+    type: Number,
+    default: 0
+  },
+  cancelRequestedAt: { type: Date },
 }, {
 });
 
