@@ -30,6 +30,13 @@ exports.getAllOrders = async (req, res) => {
 
         const orderItems = await OrderItem.find({
             _id: { $in: orderItemIds }
+        }).populate({
+            path: 'productVariant',
+            select: 'images sellPrice attribute',
+            populate: {
+                path: 'attribute',
+                select: 'value'
+            }
         }).lean();
 
         // Lấy tất cả productIds
@@ -74,10 +81,21 @@ exports.getAllOrders = async (req, res) => {
                 const orderItem = orderItemMap[orderItemId.toString()];
                 if (orderItem) {
                     const product = productMap[orderItem.productId?.toString()];
+                    
+                    const variantInfo = orderItem.productVariant ? {
+                        images: orderItem.productVariant.images || [],
+                        sellPrice: orderItem.productVariant.sellPrice || 0,
+                        attributes: orderItem.productVariant.attribute ? 
+                                    orderItem.productVariant.attribute.map(attr => attr.value) : []
+                    } : {};
+
                     return {
+                        _id:orderItem._id,
                         productName: product ? product.name : 'Sản phẩm không tìm thấy',
                         quantity: orderItem.quantity || 0,
-                        price: orderItem.price || 0
+                        price: orderItem.price || 0,
+                        status:orderItem.status,
+                        ...variantInfo
                     };
                 }
                 return null;
@@ -195,6 +213,7 @@ exports.getOrderDetails = async (req, res) => {
         // Tìm tất cả OrderItems
         const orderItems = await OrderItem.find({
             _id: { $in: orderItemIds }
+        
         }).lean();
 
         // Lấy danh sách productId và productVariantId

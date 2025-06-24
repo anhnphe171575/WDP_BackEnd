@@ -238,29 +238,59 @@ exports.editOrderItemStatus = async (req, res) => {
     try {
         const orderId = req.params.id;
         const orderItemId = req.params.orderItemId;
-        // Lấy quantity từ body
-        const { quantity } = req.body;
+        console.log(orderId)
 
-        // Find the order item
+        // Kiểm tra order tồn tại
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
         const orderItem = await OrderItem.findById(orderItemId);
         if (!orderItem) {
             return res.status(404).json({ message: 'Order item not found' });
-        }   
-        // Update the status
+        }
+
+        // Kiểm tra orderItem có thuộc order không
+        if (!order.OrderItems.includes(orderItemId)) {
+            return res.status(400).json({ message: 'Order item does not belong to this order' });
+        }
+
+        // Chỉ xử lý các item đang ở trạng thái 'returned-requested'
+        if (orderItem.status !== 'returned-requested') {
+            return res.status(400).json({ message: `Order item is not in 'returned-requested' state.`});
+        }
+        
         orderItem.status = 'returned';
-        if (quantity && Number(quantity) > 0) {        
-            // Update stock for import_batches: cộng vào batch mới nhất của variant
+        orderItem.returnedAt = Date.now();
+
+        // Hoàn lại số lượng hàng đã yêu cầu trả vào kho
+        if (orderItem.returnRequestedQuantity && orderItem.returnRequestedQuantity > 0) {        
             if (orderItem.productVariant) {
                 const latestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant })
                     .sort({ importDate: -1 });
                 if (latestBatch) {
-                    latestBatch.quantity += Number(quantity);
+                    latestBatch.quantity += orderItem.returnRequestedQuantity;
                     await latestBatch.save();
                 }
             }
         }
         await orderItem.save();
-        res.status(200).json({ message: 'Order item status updated successfully', orderItem });
+
+        // Kiểm tra xem tất cả các orderItems trong đơn hàng đã được trả hết chưa
+        const allOrderItems = await OrderItem.find({ _id: { $in: order.OrderItems } });
+        const allReturned = allOrderItems.every(item => item.status === 'returned');
+        
+        if (allReturned) {
+            order.status = 'returned';
+            await order.save();
+        }
+
+        res.status(200).json({ 
+            message: 'Order item status updated successfully to returned.', 
+            orderItem,
+            orderStatus: order.status
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -269,28 +299,76 @@ exports.editOrderItemStatus = async (req, res) => {
 exports.requestReturnOrderItem = async (req, res) => {
     try {
         const orderId = req.params.id;
-        const orderItemId = req.params.orderItemId;
-        const { reason } = req.body;
+        const { reason, items } = req.body; // items is an array of { orderItemId, returnQuantity }
+        console.log(req.body);
+        
         // Validate input
-        if (!reason) {
-            return res.status(400).json({ message: 'Reason for return is required' });
+        if (!reason || !items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ message: 'Lý do và danh sách sản phẩm cần trả là bắt buộc.' });
         }
 
-        // Find the order item
-        const orderItem = await OrderItem.findById(orderItemId);
-        if (!orderItem) {
-            return res.status(404).json({ message: 'Order item not found' });
+        const updatedOrderItems = [];
+        const errorMessages = [];
+
+        const order = await Order.findById(orderId).lean();
+        if (!order) {
+            return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
         }
-        // Check if the order item is already returned or return requested
-        if ( orderItem.status === 'returned-requested') {
-            return res.status(400).json({ message: 'Order item has already been returned or return requested' });
+        const orderItemIdsInOrder = order.OrderItems.map(item => item.toString());
+
+        for (const item of items) {
+            const { orderItemId, returnQuantity } = item;
+
+            if (!orderItemId || !returnQuantity || Number(returnQuantity) <= 0) {
+                errorMessages.push(`Dữ liệu không hợp lệ cho một trong các sản phẩm.`);
+                continue; 
+            }
+            
+            if (!orderItemIdsInOrder.includes(orderItemId)) {
+                errorMessages.push(`Sản phẩm với ID ${orderItemId} không thuộc đơn hàng này.`);
+                continue;
+            }
+
+            const orderItem = await OrderItem.findById(orderItemId);
+
+            if (!orderItem) {
+                errorMessages.push(`Không tìm thấy sản phẩm trong đơn hàng với ID ${orderItemId}.`);
+                continue;
+            }
+
+            if (orderItem.status === 'returned-requested' || orderItem.status === 'returned') {
+                errorMessages.push(`Sản phẩm ${orderItemId} đã được yêu cầu trả hoặc đã được trả.`);
+                continue;
+            }
+            
+            if (Number(returnQuantity) > orderItem.quantity) {
+                 errorMessages.push(`Số lượng trả của sản phẩm ${orderItemId} lớn hơn số lượng đã mua.`);
+                 continue;
+            }
+
+            // Update the status to 'returned-requested'
+            orderItem.status = 'returned-requested';
+            orderItem.reason = reason;
+            orderItem.returnRequestedQuantity = Number(returnQuantity);
+            orderItem.returnRequestedAt = Date.now();
+            
+            await orderItem.save();
+            updatedOrderItems.push(orderItem);
         }
-        // Update the status to 'returned-requested'
-        orderItem.status = 'returned-requested';
-        orderItem.reason = reason;
-        orderItem.returnRequestedAt = Date.now();
-        await orderItem.save();
-        res.status(200).json({ message: 'Return request submitted successfully', orderItem });
+       
+        if (errorMessages.length > 0 && updatedOrderItems.length === 0) {
+             return res.status(400).json({ 
+                message: 'Yêu cầu của bạn có lỗi, không có sản phẩm nào được cập nhật.', 
+                errors: errorMessages,
+            });
+        }
+        
+        res.status(200).json({ 
+            message: 'Yêu cầu trả hàng đã được gửi thành công.', 
+            updatedOrderItems,
+            errors: errorMessages.length > 0 ? errorMessages : undefined
+        });
+         
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -332,5 +410,82 @@ exports.updateBulkStatus= async(req, res)=>{
         res.status(200).json({ message: `Đã cập nhật ${result.modifiedCount} đơn hàng thành công.` });
     } catch (error) {
         res.status(400).json({ message: error.message });
+    }
+}
+exports.requestCancelledOrderItem = async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const { reason, items } = req.body; // items is an array of { orderItemId, cancelQuantity }
+        
+        // Validate input
+        if (!reason || !items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ message: 'Lý do và danh sách sản phẩm cần hủy là bắt buộc.' });
+        }
+
+        const updatedOrderItems = [];
+        const errorMessages = [];
+
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+        }
+        const orderItemIdsInOrder = order.OrderItems.map(item => item.toString());
+
+        for (const item of items) {
+            const { orderItemId, cancelQuantity } = item;
+
+            if (!orderItemId || !cancelQuantity || Number(cancelQuantity) <= 0) {
+                errorMessages.push(`Dữ liệu không hợp lệ cho một trong các sản phẩm.`);
+                continue; 
+            }
+            
+            if (!orderItemIdsInOrder.includes(orderItemId)) {
+                errorMessages.push(`Sản phẩm với ID ${orderItemId} không thuộc đơn hàng này.`);
+                continue;
+            }
+
+            const orderItem = await OrderItem.findById(orderItemId);
+
+            if (!orderItem) {
+                errorMessages.push(`Không tìm thấy sản phẩm trong đơn hàng với ID ${orderItemId}.`);
+                continue;
+            }
+
+            if (orderItem.status === 'cancelled-requested' || orderItem.status === 'returned' || orderItem.status === 'returned-requested') {
+                errorMessages.push(`Sản phẩm ${orderItemId} đã được yêu cầu hủy/trả hoặc đã được trả.`);
+                continue;
+            }
+            
+            if (Number(cancelQuantity) > orderItem.quantity) {
+                 errorMessages.push(`Số lượng hủy của sản phẩm ${orderItemId} lớn hơn số lượng đã mua.`);
+                 continue;
+            }
+
+            // Update the status to 'cancelled-requested'
+            orderItem.status = 'cancelled-requested';
+            orderItem.reason = reason;
+            orderItem.cancelRequestedQuantity = Number(cancelQuantity);
+            orderItem.cancelRequestedAt = Date.now();
+            
+            await orderItem.save();
+            updatedOrderItems.push(orderItem);
+        }
+       
+        if (errorMessages.length > 0 && updatedOrderItems.length === 0) {
+             return res.status(400).json({ 
+                message: 'Yêu cầu của bạn có lỗi, không có sản phẩm nào được cập nhật.', 
+                errors: errorMessages,
+            });
+        }
+        
+        
+        res.status(200).json({ 
+            message: 'Yêu cầu hủy sản phẩm đã được gửi thành công.', 
+            updatedOrderItems,
+            errors: errorMessages.length > 0 ? errorMessages : undefined
+        });
+         
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 }

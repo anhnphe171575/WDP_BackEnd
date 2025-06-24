@@ -211,6 +211,148 @@ router.put('/:id', orderController.updateOrder);
 router.delete('/:id', orderController.deleteOrder);
 
 // edit orderItem status
+// request return order item
+/**
+ * @swagger
+ * /api/orders/{id}/orderItem/request-return:
+ *   put:
+ *     summary: Gửi yêu cầu trả hàng cho một hoặc nhiều sản phẩm trong đơn hàng
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của đơn hàng chứa các sản phẩm cần trả
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *                - reason
+ *                - items
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Lý do chung cho việc trả hàng.
+ *                 example: "Sản phẩm không đúng mô tả"
+ *               items:
+ *                 type: array
+ *                 description: Một mảng các sản phẩm cần yêu cầu trả hàng.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - orderItemId
+ *                     - returnQuantity
+ *                   properties:
+ *                     orderItemId:
+ *                       type: string
+ *                       description: ID của một mục trong đơn hàng (order item).
+ *                       example: "60c72b2f9b1d8c001f8e4c9a"
+ *                     returnQuantity:
+ *                       type: number
+ *                       description: Số lượng sản phẩm muốn trả cho mục này.
+ *                       example: 1
+ *     responses:
+ *       '200':
+ *         description: Yêu cầu trả hàng đã được gửi thành công. Phản hồi có thể chứa một mảng lỗi nếu một số mặt hàng không hợp lệ.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 updatedOrderItems:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/OrderItem' 
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                      type: string
+ *       '400':
+ *         description: Dữ liệu yêu cầu không hợp lệ (thiếu lý do, danh sách sản phẩm, hoặc tất cả sản phẩm đều không hợp lệ).
+ *       '404':
+ *         description: Không tìm thấy đơn hàng với ID đã cung cấp.
+ *       '500':
+ *         description: Lỗi máy chủ nội bộ.
+ */
+router.put('/:id/orderItem/request-return', orderController.requestReturnOrderItem);
+
+/**
+ * @swagger
+ * /api/orders/{id}/orderItem/cancelled:
+ *   put:
+ *     summary: Gửi yêu cầu hủy một hoặc nhiều sản phẩm trong đơn hàng
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của đơn hàng chứa các sản phẩm cần hủy
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *                - reason
+ *                - items
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Lý do chung cho việc hủy sản phẩm.
+ *                 example: "Khách đổi ý"
+ *               items:
+ *                 type: array
+ *                 description: Một mảng các sản phẩm cần yêu cầu hủy.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - orderItemId
+ *                     - cancelQuantity
+ *                   properties:
+ *                     orderItemId:
+ *                       type: string
+ *                       description: ID của một mục trong đơn hàng (order item).
+ *                       example: "60c72b2f9b1d8c001f8e4c9a"
+ *                     cancelQuantity:
+ *                       type: number
+ *                       description: Số lượng sản phẩm muốn hủy cho mục này.
+ *                       example: 1
+ *     responses:
+ *       '200':
+ *         description: Yêu cầu hủy sản phẩm đã được gửi thành công. Phản hồi có thể chứa một mảng lỗi nếu một số mặt hàng không hợp lệ.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 updatedOrderItems:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/OrderItem'
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                      type: string
+ *       '400':
+ *         description: Dữ liệu yêu cầu không hợp lệ (thiếu lý do, danh sách sản phẩm, hoặc tất cả sản phẩm đều không hợp lệ).
+ *       '404':
+ *         description: Không tìm thấy đơn hàng với ID đã cung cấp.
+ *       '500':
+ *         description: Lỗi máy chủ nội bộ.
+ */
+router.put('/:id/orderItem/cancelled', orderController.requestCancelledOrderItem);
 
 /**
  * @swagger
@@ -249,59 +391,7 @@ router.delete('/:id', orderController.deleteOrder);
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id/orderItem/:orderItemId/returned', orderController.editOrderItemStatus);
+router.put('/:id/orderItem/:orderItemId', orderController.editOrderItemStatus);
 
-// request return order item
-/**
- * @swagger
- * /api/orders/{id}/orderItem/{orderItemId}/request-return:
- *   put:
- *     summary: Yêu cầu trả hàng cho một order item trong đơn hàng
- *     tags: [Orders]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: ID của đơn hàng
- *       - in: path
- *         name: orderItemId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID của order item
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               reason:
- *                 type: string
- *                 description: Lý do trả hàng
- *             required:
- *               - reason
- *     responses:
- *       200:
- *         description: Gửi yêu cầu trả hàng thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 orderItem:
- *                   $ref: '#/components/schemas/OrderItem'
- *       400:
- *         description: Lý do trả hàng thiếu hoặc order item đã được trả/trả lại trước đó
- *       404:
- *         description: Không tìm thấy order item
- *       500:
- *         description: Lỗi server
- */
-router.put('/:id/orderItem/:orderItemId/request-return', orderController.requestReturnOrderItem);
 
 module.exports = router;
