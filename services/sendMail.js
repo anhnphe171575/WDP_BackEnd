@@ -128,7 +128,7 @@ Hệ thống hỗ trợ`,
                                     </div>
                                     
                                     <p style="color: #333; font-weight: bold; margin-top: 30px;">Trân trọng,</p>
-                                    <p style="color: #333;">Hệ thống hỗ trợ</p>
+                                    <p style="color: #333;">Hệ thống hỗ trợ Pet Nest</p>
                                 </td>
                             </tr>
                         </table>
