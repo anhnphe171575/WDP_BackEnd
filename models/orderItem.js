@@ -22,7 +22,7 @@ const orderItemSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['completed', 'returned-requested', 'returned','cancelled-requested'],
+    enum: ['completed', 'returned-requested', 'returned','cancelled-requested', 'cancelled'],
     default: 'completed'
   },
   reason: {
