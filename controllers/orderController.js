@@ -412,12 +412,11 @@ exports.updateBulkStatus= async(req, res)=>{
         res.status(400).json({ message: error.message });
     }
 }
-exports.requestCancelledOrderItem = async (req, res) => {
+exports.requestCancelledOrderItem = async(req,res)=>{
     try {
         const orderId = req.params.id;
         const { reason, items } = req.body; // items is an array of { orderItemId, cancelQuantity }
-        
-        // Validate input
+
         if (!reason || !items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ message: 'Lý do và danh sách sản phẩm cần hủy là bắt buộc.' });
         }
@@ -435,8 +434,8 @@ exports.requestCancelledOrderItem = async (req, res) => {
             const { orderItemId, cancelQuantity } = item;
 
             if (!orderItemId || !cancelQuantity || Number(cancelQuantity) <= 0) {
-                errorMessages.push(`Dữ liệu không hợp lệ cho một trong các sản phẩm.`);
-                continue; 
+                errorMessages.push(`Dữ liệu không hợp lệ cho sản phẩm ID ${orderItemId}.`);
+                continue;
             }
             
             if (!orderItemIdsInOrder.includes(orderItemId)) {
@@ -450,22 +449,30 @@ exports.requestCancelledOrderItem = async (req, res) => {
                 errorMessages.push(`Không tìm thấy sản phẩm trong đơn hàng với ID ${orderItemId}.`);
                 continue;
             }
-
-            if (orderItem.status === 'cancelled-requested' || orderItem.status === 'returned' || orderItem.status === 'returned-requested') {
-                errorMessages.push(`Sản phẩm ${orderItemId} đã được yêu cầu hủy/trả hoặc đã được trả.`);
+            
+            // Allow cancellation only for items that have not been cancelled or returned
+            if (['cancelled', 'returned', 'returned-requested'].includes(orderItem.status)) {
+                errorMessages.push(`Sản phẩm ${orderItemId} đã được xử lý (hủy/trả) và không thể hủy.`);
                 continue;
             }
-            
-            if (Number(cancelQuantity) > orderItem.quantity) {
-                 errorMessages.push(`Số lượng hủy của sản phẩm ${orderItemId} lớn hơn số lượng đã mua.`);
-                 continue;
-            }
 
-            // Update the status to 'cancelled-requested'
-            orderItem.status = 'cancelled-requested';
+            // Return stock to the OLDEST import batch
+            if (orderItem.productVariant) {
+                const oldestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant }).sort({ importDate: 1 });
+                if (oldestBatch) {
+                    oldestBatch.quantity += Number(orderItem.quantity);
+                    await oldestBatch.save();
+                } else {
+                    errorMessages.push(`Không tìm thấy lô hàng cho sản phẩm ${orderItemId} để cập nhật kho.`);
+                    continue; // Skip this item if no batch found
+                }
+            }
+            
+            orderItem.status = 'cancelled';
             orderItem.reason = reason;
-            orderItem.cancelRequestedQuantity = Number(cancelQuantity);
-            orderItem.cancelRequestedAt = Date.now();
+            // Assuming partial cancellation is not supported for simplicity, 
+            // or if it is, this reflects the cancelled amount.
+            orderItem.cancelRequestedQuantity = (orderItem.quantity || 0) 
             
             await orderItem.save();
             updatedOrderItems.push(orderItem);
@@ -478,10 +485,19 @@ exports.requestCancelledOrderItem = async (req, res) => {
             });
         }
         
-        
+        // Check if all items in the order are now cancelled or returned
+        const allOrderItems = await OrderItem.find({ _id: { $in: order.OrderItems } });
+        const allItemsFinalized = allOrderItems.every(item => ['cancelled', 'returned'].includes(item.status));
+
+        if (allItemsFinalized) {
+            order.status = 'cancelled'; // Or a more appropriate status like 'completed_with_returns_cancellations'
+            await order.save();
+        }
+
         res.status(200).json({ 
-            message: 'Yêu cầu hủy sản phẩm đã được gửi thành công.', 
+            message: 'Hủy sản phẩm thành công.', 
             updatedOrderItems,
+            orderStatus: order.status,
             errors: errorMessages.length > 0 ? errorMessages : undefined
         });
          
