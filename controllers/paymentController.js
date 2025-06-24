@@ -1,23 +1,28 @@
 const express = require("express");
 const router = express.Router();
 const payOS = require("../utils/payos");
-
+const OrderModel = require("../models/order");
+const ProductVariant = require("../models/productVariant");
+const Order = require("../models/order");
+const OrderItem = require("../models/orderItem");
+const Cart = require("../models/cart");
+const CartItem = require("../models/cartItem");
+const ImportBatch = require("../models/import_batches");
+const User = require("../models/userModel");
 
 exports.createPayment = async (req, res) => {
   const userId = req.user.id;    
-    const { orderItems, amount } = req.body;
-    console.log(req.body)
-    // Tạo orderCode là số ngẫu nhiên 6 chữ số
+    const {  addressId, amount, shippingMethod, paymentMethod, items } = req.body;
     const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const timestamp = Date.now() % 1000000; // Lấy 6 chữ số cuối của timestamp
-    const orderCode = Number(`${timestamp}${randomNum}`.slice(-9)); // Đảm bảo không quá 9 chữ số
-    
+    const timestamp = Date.now() % 1000000; 
+    const orderCode = Number(`${timestamp}${randomNum}`.slice(-9)); 
+    console.log(req.body)
     const body = {
         orderCode,
         amount: amount,
         description: 'Thanh toan don hang',
-        returnUrl: `http://localhost:3000/payment/result?orderItems=${orderItems}&userId=${userId}&amount=${amount}`,
-        cancelUrl: `aaaa`   
+        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}`,
+        cancelUrl: `http://localhost:3000/payment/result`   
     };
     try {
         const paymentLinkResponse = await payOS.createPaymentLink(body);
@@ -34,78 +39,201 @@ exports.createPayment = async (req, res) => {
 
 exports.callback = async (req, res) => {
   try {
-    const { code, id, status, orderCode, userId, price, packageId } = req.query;
-    console.log("User data:", userId, packageId, price);
+    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode } = req.body;
+    const userId = req.user?.id || req.body.userId; // Lấy userId từ req nếu có
+    console.log(req.body);
 
-    if (code === "00") {
-      const user = await Employer.findById(userId);
+    // Parse items từ JSON string nếu cần
+    let parsedItems = items;
+    if (typeof items === 'string') {
+      try {
+        parsedItems = JSON.parse(items);
+      } catch (error) {
+        console.error('Error parsing items JSON:', error);
+        return res.status(400).json({ message: "Invalid items format" });
+      }
+    }
+
+    if (code === "00" && status === "PAID" && cancel === "false") {
+      console.log("aaa");
+      const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-
-      if (user.Role !== "employer") {
-        return res.status(403).json({ message: "Only employers can subscribe to packages" });
+      // Tìm address theo addressId
+      const addressObj = user.address.id(addressId);
+      if (!addressObj) {
+        return res.status(404).json({ message: "Address not found" });
       }
 
-    
-      // Kiểm tra xem payment_id đã tồn tại chưa
-      const paymentExists = user.UserSubcription?.some(sub => 
-        sub.Payment_info?.payment_id === orderCode
+      // Lấy thông tin các cart item
+      const cartItemIds = parsedItems.map(item => item.cartItemId);
+      const cartItems = await CartItem.find({ _id: { $in: cartItemIds } });
+
+      // Tạo các OrderItem
+      const orderItemIds = [];
+      for (const cartItem of cartItems) {
+        // Lấy thông tin product variant để biết giá
+        const productVariant = await ProductVariant.findById(cartItem.productVariantId);
+        if (!productVariant) {
+          return res.status(404).json({ message: `Product variant not found: ${cartItem.productVariantId}` });
+        }
+
+        // Trừ số lượng từ các lô nhập cũ nhất
+        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId })
+          .sort({ importDate: 1 }); // Sắp xếp theo ngày nhập, cũ nhất trước
+
+        let remainingQuantity = cartItem.quantity;
+        for (const batch of importBatches) {
+          if (remainingQuantity <= 0) break;
+          
+          if (batch.quantity > 0) {
+            const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
+            batch.quantity -= quantityToDeduct;
+            remainingQuantity -= quantityToDeduct;
+            await batch.save();
+          }
+        }
+
+        if (remainingQuantity > 0) {
+          return res.status(400).json({ 
+            message: `Insufficient stock for product variant: ${cartItem.productVariantId}` 
+          });
+        }
+
+        const orderItem = new OrderItem({
+          productId: cartItem.productId,
+          productVariant: cartItem.productVariantId,
+          quantity: cartItem.quantity,
+          price: productVariant.sellPrice || 0
+        });
+        await orderItem.save();
+        orderItemIds.push(orderItem._id);
+      }
+
+      // Tạo Order mới
+      const newOrder = new OrderModel({
+        userId: userId,
+        OrderItems: orderItemIds,
+        total: amount,
+        status: "completed",
+        paymentMethod: paymentMethod,
+        address: addressObj,
+      });
+      await newOrder.save();
+
+      // Xóa các cart item khỏi CartItem
+      await CartItem.deleteMany({ _id: { $in: cartItemIds } });
+
+      // Xóa các cart item khỏi Cart của user
+      await Cart.updateOne(
+        { userId: userId },
+        { $pull: { cartItems: { $in: cartItemIds } } }
       );
 
-      if (paymentExists) {
-        return res.status(400).json({ 
-          message: "Payment already processed",
-        });
+      return res.status(200).json({
+        error: 0,
+        message: "Order created and payment successful",
+        order: newOrder
+      });
+    } else if (paymentMethod === "cod") {
+      console.log("bbb");
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      // Tìm address theo addressId
+      const addressObj = user.address.id(addressId);
+      if (!addressObj) {
+        return res.status(404).json({ message: "Address not found" });
       }
 
-      // Khởi tạo mảng UserSubcription nếu chưa có
-      if (!Array.isArray(user.UserSubcription)) {
-        user.UserSubcription = [];
-      }
+      // Lấy thông tin các cart item
+      const cartItemIds = parsedItems.map(item => item.cartItemId);
+      const cartItems = await CartItem.find({ _id: { $in: cartItemIds } });
 
-      // Cập nhật status = false cho tất cả các gói cũ
-      user.UserSubcription = user.UserSubcription.map(sub => ({
-        ...sub,
-        status: false
-      }));
-
-      // Tạo subscription mới với status = true
-      const startDate = new Date();
-      const endDate = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + 1);
-
-      const newSubscription = {
-        packageId: packageId,
-        Start_date: startDate,
-        End_date: endDate,
-        status: true,
-        Payment_info: {
-          payment_id: orderCode,
-          amount: price || 0,
-          currency: "VND",
-          status: "completed",
-          method: "payOS",
-          date: new Date()
+      // Tạo các OrderItem
+      const orderItemIds = [];
+      for (const cartItem of cartItems) {
+        // Lấy thông tin product variant để biết giá
+        const productVariant = await ProductVariant.findById(cartItem.productVariantId);
+        if (!productVariant) {
+          return res.status(404).json({ message: `Product variant not found: ${cartItem.productVariantId}` });
         }
-      };
 
-      user.UserSubcription.push(newSubscription);
-      await user.save();
+        // Trừ số lượng từ các lô nhập cũ nhất
+        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId })
+          .sort({ importDate: 1 }); // Sắp xếp theo ngày nhập, cũ nhất trước
 
-      return res.status(200).json({ 
-        message: "Package subscribed successfully", 
-        subscription: newSubscription 
+        let remainingQuantity = cartItem.quantity;
+        for (const batch of importBatches) {
+          if (remainingQuantity <= 0) break;
+          
+          if (batch.quantity > 0) {
+            const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
+            batch.quantity -= quantityToDeduct;
+            remainingQuantity -= quantityToDeduct;
+            await batch.save();
+          }
+        }
+
+        if (remainingQuantity > 0) {
+          return res.status(400).json({ 
+            message: `Insufficient stock for product variant: ${cartItem.productVariantId}` 
+          });
+        }
+
+        const orderItem = new OrderItem({
+          productId: cartItem.productId,
+          productVariant: cartItem.productVariantId,
+          quantity: cartItem.quantity,
+          price: productVariant.sellPrice || 0
+        });
+        await orderItem.save();
+        orderItemIds.push(orderItem._id);
+      }
+
+      // Tạo Order mới
+      const newOrder = new OrderModel({
+        userId: userId,
+        OrderItems: orderItemIds,
+        total: amount,
+        status: "completed",
+        paymentMethod: paymentMethod,
+        address: addressObj,
+      });
+      await newOrder.save();
+
+      // Xóa các cart item khỏi CartItem
+      await CartItem.deleteMany({ _id: { $in: cartItemIds } });
+
+      // Xóa các cart item khỏi Cart của user
+      await Cart.updateOne(
+        { userId: userId },
+        { $pull: { cartItems: { $in: cartItemIds } } }
+      );
+
+      return res.status(200).json({
+        error: 0,
+        message: "Order created and payment successful",
+        order: newOrder
+      });
+    } else if (paymentMethod === "MOMO") {
+      return res.status(200).json({
+        error: 1,
+        message: "Payment failed",
+      });
+    } else {
+      return res.status(200).json({
+        error: 1,
+        message: "Payment failed",
       });
     }
-
-    return res.status(200).json(req.query);
-    
   } catch (error) {
     console.error("Callback error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: "Error processing payment callback",
-      error: error.message 
+      error: error.message
     });
   }
 };
