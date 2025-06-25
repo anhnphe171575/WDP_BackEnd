@@ -6,9 +6,8 @@ let io;
 function setupSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: "http://localhost:3000", // hoặc chỉ định domain frontend
-      methods: ['GET', 'POST'],
-      credentials: true,              // ❗️ BẠN CẦN THÊM DÒNG NÀY
+      origin: "*", // hoặc chỉ định domain frontend
+                  // ❗️ BẠN CẦN THÊM DÒNG NÀY
 
     },
   });

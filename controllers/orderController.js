@@ -290,6 +290,7 @@ exports.editOrderItemStatus = async (req, res) => {
 
         // Gửi thông báo tới user
         const notification = new Notification({
+            orderId: order.id,
             userId: order.userId,
             title: 'Trạng thái đơn hàng',
             description: `Một sản phẩm trong đơn hàng của bạn đã được xác nhận trả hàng thành công.`,

@@ -6,6 +6,12 @@ const notificationSchema = new mongoose.Schema({
     ref: 'User', // Tham chiếu đến người dùng nhận thông báo
     required: true
   },
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order', // Tham chiếu đến đơn hàng liên quan (nếu có)
+    required: false
+  }
+  ,
   title: {
     type: String,
     required: true

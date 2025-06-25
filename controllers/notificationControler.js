@@ -16,3 +16,25 @@ exports.getAllNotifications = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Cập nhật trạng thái isRead của notification
+exports.markAsRead = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isRead } = req.body;
+        if (typeof isRead !== 'boolean') {
+            return res.status(400).json({ message: 'isRead must be boolean' });
+        }
+        const notification = await Notification.findByIdAndUpdate(
+            id,
+            { isRead },
+            { new: true }
+        );
+        if (!notification) {
+            return res.status(404).json({ message: 'Notification not found' });
+        }
+        res.status(200).json(notification);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
