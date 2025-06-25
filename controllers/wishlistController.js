@@ -1,9 +1,10 @@
 const Wishlist = require('../models/wishlist');
+const ProductVariant = require('../models/productVariant');
 
 // Thêm sản phẩm vào wishlist
 exports.addToWishlist = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const { productId } = req.body;
     let wishlist = await Wishlist.findOne({ user: userId });
     if (!wishlist) {
@@ -23,7 +24,7 @@ exports.addToWishlist = async (req, res) => {
 // Xóa sản phẩm khỏi wishlist
 exports.removeFromWishlist = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const { productId } = req.body;
     const wishlist = await Wishlist.findOne({ user: userId });
     if (!wishlist) {
@@ -42,12 +43,22 @@ exports.removeFromWishlist = async (req, res) => {
 // Lấy danh sách wishlist của user
 exports.getWishlist = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const wishlist = await Wishlist.findOne({ user: userId }).populate('products');
     if (!wishlist) {
       return res.status(200).json({ success: true, products: [] });
     }
-    res.status(200).json({ success: true, products: wishlist.products });
+    // Lấy ảnh variant đầu tiên cho mỗi sản phẩm
+    const productsWithImages = await Promise.all(
+      wishlist.products.map(async (product) => {
+        const variant = await ProductVariant.findOne({ product_id: product._id });
+        return {
+          ...product.toObject(),
+          image: variant?.images?.[0]?.url || null,
+        };
+      })
+    );
+    res.status(200).json({ success: true, products: productsWithImages });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
