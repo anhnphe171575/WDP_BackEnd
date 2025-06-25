@@ -27,7 +27,7 @@ const OrderSchema = new Schema({
   status: {
     type: String,
     required: true,
-    emum: ['pending', 'processing', 'shipped', 'completed', 'returned', 'cancelled'],
+    enum: ['pending', 'processing', 'shipped', 'completed', 'returned', 'cancelled','reject-return'],
     default: 'pending'
   },
   paymentMethod: {
@@ -46,6 +46,10 @@ const OrderSchema = new Schema({
   updateAt: {
     type: Date,
     default: Date.now
+  },
+  reasonRejectCancel: {
+    type: String,
+    default: ''
   }
 });
 

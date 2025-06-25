@@ -393,5 +393,39 @@ router.put('/:id/orderItem/cancelled', orderController.requestCancelledOrderItem
  */
 router.put('/:id/orderItem/:orderItemId', orderController.editOrderItemStatus);
 
+/**
+ * @swagger
+ * /api/orders/{id}/reject-return:
+ *   put:
+ *     summary: Từ chối yêu cầu trả hàng cho một đơn hàng
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của đơn hàng.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Lý do từ chối yêu cầu trả hàng.
+ *     responses:
+ *       200:
+ *         description: Yêu cầu trả hàng đã bị từ chối thành công.
+ *       400:
+ *         description: Dữ liệu đầu vào không hợp lệ hoặc không có yêu cầu trả hàng.
+ *       404:
+ *         description: Không tìm thấy đơn hàng.
+ *       500:
+ *         description: Lỗi máy chủ.
+ */
+router.put('/:id/reject-return', orderController.rejectReturnRequest);
 
 module.exports = router;
