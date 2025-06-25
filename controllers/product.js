@@ -627,8 +627,11 @@ const getProductById = async (req, res) => {
                             input: '$categoryInfo',
                             as: 'cat',
                             in: {
-                                id: '$$cat._id',
-                                name: '$$cat.name'
+                                _id: '$$cat._id',
+                                name: '$$cat.name',
+                                description: '$$cat.description',
+                                isParent: { $eq: ['$$cat.parentCategory', null] },
+                                parentCategory: '$$cat.parentCategory'
                             }
                         }
                     }
@@ -884,6 +887,7 @@ const updateProduct = async (req, res) => {
 
         // Validate required fields
         if (!name || !description) {
+            
             return res.status(400).json({
                 success: false,
                 message: 'Name and description are required'
@@ -919,10 +923,15 @@ const updateProduct = async (req, res) => {
             }
 
             // Validate all categories exist
-            const categoryIds = categories.map(cat => cat.categoryId);
-            console.log('Validated category IDs:', categoryIds);
+             const categoryIds = [...new Set(categories.map(cat => cat.categoryId))];
+        console.log('Validated category IDs:', categoryIds);
+            // const categoryIds = categories.map(cat => cat.categoryId);
+            // console.log('Validated category IDs:', categoryIds);
 
             const existingCategories = await Category.find({ _id: { $in: categoryIds } });
+            console.log(existingCategories);
+            console.log(existingCategories.length );
+            console.log(categoryIds.length)
             if (existingCategories.length !== categoryIds.length) {
                 return res.status(400).json({
                     success: false,
