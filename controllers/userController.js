@@ -19,7 +19,7 @@ exports.getAllOrders = async (req, res) => {
         const userId = req.user.id;
 
         const orders = await Order.find({ userId })
-            .select('_id total status paymentMethod createAt OrderItems voucher')
+            .select('_id total status paymentMethod createAt OrderItems voucher reasonRejectCancel')
             .sort({ createAt: -1 })
             .lean();
 
@@ -137,7 +137,8 @@ exports.getAllOrders = async (req, res) => {
                 paymentMethod: order.paymentMethod,
                 createAt: order.createAt,
                 items: orderItems,
-                vouchers: orderVouchers
+                vouchers: orderVouchers,
+                reasonRejectCancel: order.reasonRejectCancel || ''
             };
         });
 

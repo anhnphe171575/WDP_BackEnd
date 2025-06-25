@@ -5,6 +5,8 @@ const Product = require('../models/product')
 const ProductVariant = require('../models/productVariant')
 const Attribute = require('../models/attribute')
 const ImportBatch = require('../models/import_batches');
+const Notification = require('../models/notificationModel');
+const { getIO } = require('../config/socket.io');
 
 // Create new order
 exports.createOrder = async (req, res) => {
@@ -268,7 +270,7 @@ exports.editOrderItemStatus = async (req, res) => {
         if (orderItem.returnRequestedQuantity && orderItem.returnRequestedQuantity > 0) {        
             if (orderItem.productVariant) {
                 const latestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant })
-                    .sort({ importDate: -1 });
+                    .sort({ importDate: 1 });
                 if (latestBatch) {
                     latestBatch.quantity += orderItem.returnRequestedQuantity;
                     await latestBatch.save();
@@ -284,6 +286,23 @@ exports.editOrderItemStatus = async (req, res) => {
         if (allReturned) {
             order.status = 'returned';
             await order.save();
+        }
+
+        // Gửi thông báo tới user
+        const notification = new Notification({
+            orderId: order.id,
+            userId: order.userId,
+            title: 'Trạng thái đơn hàng',
+            description: `Một sản phẩm trong đơn hàng của bạn đã được xác nhận trả hàng thành công.`,
+            type: 'order',
+        });
+        await notification.save();
+        // Emit notification qua socket.io
+        try {
+            const io = getIO();
+            io.to(order.userId.toString()).emit('notification', notification);
+        } catch (e) {
+            console.error('Socket emit error:', e);
         }
 
         res.status(200).json({ 
@@ -505,3 +524,92 @@ exports.requestCancelledOrderItem = async(req,res)=>{
         res.status(500).json({ message: error.message });
     }
 }
+
+// Reject an order return request
+exports.rejectReturnRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason) {
+            return res.status(400).json({ message: 'Reason for rejection is required.' });
+        }
+
+        const order = await Order.findById(id).populate('OrderItems');
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found.' });
+        }
+
+        const itemsToReject = order.OrderItems.filter(item => item.status === 'returned-requested');
+
+        if (itemsToReject.length === 0) {
+            return res.status(400).json({ message: 'No return request found for this order.' });
+        }
+
+        for (const item of itemsToReject) {
+            await OrderItem.findByIdAndUpdate(item._id, {
+                status: 'completed',
+                reason: `Return rejected: ${reason}`,
+                returnRequestedQuantity: 0,
+                returnRequestedAt: null
+            });
+        }
+        
+        order.status = 'reject-return';
+        order.reasonRejectCancel = reason;
+        order.updateAt = Date.now();
+
+        await order.save();
+
+        const updatedOrder = await Order.findById(id).populate({
+            path: 'OrderItems',
+            populate: {
+                path: 'productId',
+                select: 'name'
+            }
+        });
+
+        res.status(200).json({
+            message: 'Order return request rejected successfully.',
+            order: updatedOrder
+        });
+
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get order by user ID
+exports.getOrderByUserId = async (req, res) => {
+    try {
+        const orders = await Order.find({ userId: req.params.userId })
+            .populate('userId', 'name email address')
+            .populate({
+                path: 'OrderItems',
+                populate: [
+                    {
+                        path: 'productId',
+                        model: 'Product',
+                        select: 'name'
+                    },
+                    {
+                        path: 'productVariant',
+                        model: 'ProductVariant',
+                        select: 'images ',
+                        populate: {
+                            path: 'attribute',
+                            model: 'Attribute',
+                            select: 'value description'
+                        }
+                    }
+                ]
+            })
+            .populate('voucher');
+        res.status(200).json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+

@@ -26,6 +26,8 @@ const paymentRoute = require('./routes/paymentRoute');
 const messageRoute = require('./routes/messageRoute');
 const attributeRoute = require('./routes/attributeRoute');
 const wishlistRoute = require('./routes/wishlistRoute');
+const notifiRoute = require('./routes/notificationRoute');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -80,8 +82,9 @@ app.use('/api/reviews', reviewRoute);
 app.use('/api/payment',paymentRoute);
 app.use('/api/messages', messageRoute);
 app.use('/api/wishlist', wishlistRoute);
+app.use('/api/notification', notifiRoute);
 const PORT = 5000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Swagger documentation available at http://localhost:${PORT}/api-docs`);
 });

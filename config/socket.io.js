@@ -8,8 +8,9 @@ const userSockets = new Map();
 function setupSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
+      origin: "*", // hoặc chỉ định domain frontend
+                  // ❗️ BẠN CẦN THÊM DÒNG NÀY
+
     },
   });
 
