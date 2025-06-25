@@ -5,6 +5,8 @@ const Product = require('../models/product')
 const ProductVariant = require('../models/productVariant')
 const Attribute = require('../models/attribute')
 const ImportBatch = require('../models/import_batches');
+const Notification = require('../models/notificationModel');
+const { getIO } = require('../config/socket.io');
 
 // Create new order
 exports.createOrder = async (req, res) => {
@@ -268,7 +270,7 @@ exports.editOrderItemStatus = async (req, res) => {
         if (orderItem.returnRequestedQuantity && orderItem.returnRequestedQuantity > 0) {        
             if (orderItem.productVariant) {
                 const latestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant })
-                    .sort({ importDate: -1 });
+                    .sort({ importDate: 1 });
                 if (latestBatch) {
                     latestBatch.quantity += orderItem.returnRequestedQuantity;
                     await latestBatch.save();
@@ -284,6 +286,22 @@ exports.editOrderItemStatus = async (req, res) => {
         if (allReturned) {
             order.status = 'returned';
             await order.save();
+        }
+
+        // Gửi thông báo tới user
+        const notification = new Notification({
+            userId: order.userId,
+            title: 'Trạng thái đơn hàng',
+            description: `Một sản phẩm trong đơn hàng của bạn đã được xác nhận trả hàng thành công.`,
+            type: 'order',
+        });
+        await notification.save();
+        // Emit notification qua socket.io
+        try {
+            const io = getIO();
+            io.to(order.userId.toString()).emit('notification', notification);
+        } catch (e) {
+            console.error('Socket emit error:', e);
         }
 
         res.status(200).json({ 
