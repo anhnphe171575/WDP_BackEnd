@@ -7,7 +7,10 @@ const getAttributes = async (req, res) => {
     const { categoryId, parentId } = req.query;
     const filter = {};
     if (categoryId) filter.categories = categoryId;
-    if (parentId) filter.parentId = parentId;
+    if (parentId !== undefined) {
+      if (parentId === 'null') filter.parentId = null;
+      else filter.parentId = parentId;
+    }
     const attributes = await Attribute.find(filter).lean();
     res.status(200).json({ success: true, data: attributes });
   } catch (error) {
