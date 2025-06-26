@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const reviewController = require('../controllers/reviewController');
+const verifyToken = require('../middleware/auth');
 
 // Create a new review
-router.post('/', reviewController.createReview);
+router.post('/', verifyToken, reviewController.createReview);
 
 // Get all reviews
 router.get('/', reviewController.getAllReviews);
@@ -18,10 +19,10 @@ router.get('/user/:userId', reviewController.getReviewsByUser);
 router.get('/:id', reviewController.getReviewById);
 
 // Update review
-router.put('/:id', reviewController.updateReview);
+router.put('/:id', verifyToken, reviewController.updateReview);
 
 // Delete review
-router.delete('/:id', reviewController.deleteReview);
+router.delete('/:id', verifyToken, reviewController.deleteReview);
 
 // Get average rating for a product
 router.get('/rating/:productId', reviewController.getAverageRating);
