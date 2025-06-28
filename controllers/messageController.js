@@ -2,6 +2,7 @@ const Message = require('../models/messageModel');
 const Conversation = require('../models/conversationModel');
 const User = require('../models/userModel');
 const mongoose = require('mongoose');
+const { getIO, isUserOnline } = require('../config/socket.io');
 
 exports.sendMessage = async (req, res) => {
   try {
@@ -60,121 +61,6 @@ exports.getMessagesByConversation = async (req, res) => {
   }
 };
 
-// Tạo mới hoặc lấy conversation 1-1 giữa customer và marketing
-exports.createOrGetConversation = async (req, res) => {
-  try {
-    let { customerId, userA, userB } = req.body;
-    const CUSTOMER = 1;
-    const MARKETING = 4;
-
-    // Trường hợp chỉ định 2 user cụ thể
-    if (userA && userB) {
-      userA = mongoose.Types.ObjectId.isValid(userA) ? userA : null;
-      userB = mongoose.Types.ObjectId.isValid(userB) ? userB : null;
-      if (!userA || !userB) {
-        return res.status(400).json({ error: 'userA hoặc userB không hợp lệ' });
-      }
-
-      const users = await User.find({ _id: { $in: [userA, userB] } });
-      if (users.length !== 2) {
-        return res.status(400).json({ error: 'Không tìm thấy đủ 2 user' });
-      }
-
-      const roleA = users[0].role;
-      const roleB = users[1].role;
-      const roles = [roleA, roleB];
-
-      if (!(roles.includes(CUSTOMER) && roles.includes(MARKETING))) {
-        return res.status(400).json({ error: 'Chỉ cho phép tạo cuộc trò chuyện giữa CUSTOMER và MARKETING' });
-      }
-
-      let conversation = await Conversation.findOne({
-        $or: [
-          { customerId: userA, staffId: userB },
-          { customerId: userB, staffId: userA }
-        ]
-      });
-
-      if (!conversation) {
-        const customerId = users.find(u => u.role === CUSTOMER)._id;
-        const staffId = users.find(u => u.role === MARKETING)._id;
-        conversation = new Conversation({ customerId, staffId });
-        await conversation.save();
-      }
-
-      return res.status(200).json(conversation);
-    }
-
-    // Trường hợp random ghép cho customer
-    if (!customerId) {
-      return res.status(400).json({ error: 'customerId là bắt buộc' });
-    }
-
-    customerId = mongoose.Types.ObjectId.isValid(customerId) ? customerId : null;
-    if (!customerId) {
-      return res.status(400).json({ error: 'customerId không hợp lệ' });
-    }
-
-    const customer = await User.findOne({ _id: customerId, role: CUSTOMER });
-    if (!customer) {
-      return res.status(400).json({ error: 'Không tìm thấy user CUSTOMER' });
-    }
-
-    const marketingUsers = await User.find({ role: MARKETING });
-    if (marketingUsers.length === 0) {
-      return res.status(400).json({ error: 'Không có nhân viên marketing nào' });
-    }
-
-    // Aggregate conversation statistics
-    const marketingIds = marketingUsers.map(m => m._id);
-    const aggregation = await Conversation.aggregate([
-      { $match: { staffId: { $in: marketingIds } } },
-      {
-        $group: {
-          _id: "$staffId",
-          count: { $sum: 1 },
-          lastMessageAt: { $max: "$lastMessageAt" }
-        }
-      }
-    ]);
-
-    // Gắn thống kê vào từng marketing
-    const stats = marketingUsers.map(m => {
-      const match = aggregation.find(a => String(a._id) === String(m._id));
-      return {
-        user: m,
-        count: match ? match.count : 0,
-        lastMessageAt: match ? match.lastMessageAt : new Date(0)
-      };
-    });
-
-    // Chọn người có số lượng ít nhất
-    const minCount = Math.min(...stats.map(s => s.count));
-    let candidates = stats.filter(s => s.count === minCount);
-
-    // Ưu tiên người có thời gian tương tác xa nhất
-    if (candidates.length > 1) {
-      const minLast = Math.min(...candidates.map(s => new Date(s.lastMessageAt).getTime()));
-      candidates = candidates.filter(s => new Date(s.lastMessageAt).getTime() === minLast);
-    }
-
-    // Nếu vẫn nhiều, chọn random
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)].user;
-
-    // Tạo hoặc tìm lại conversation
-    let conversation = await Conversation.findOne({ customerId, staffId: chosen._id });
-    if (!conversation) {
-      conversation = new Conversation({ customerId, staffId: chosen._id });
-      await conversation.save();
-    }
-
-    res.status(200).json(conversation);
-
-  } catch (error) {
-    console.error('Error creating/getting conversation:', error);
-    res.status(500).json({ error: error.message });
-  }
-};
 
 // Lấy danh sách conversation của 1 user
 exports.getConversationsByUser = async (req, res) => {
@@ -199,3 +85,202 @@ exports.getConversationsByUser = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Kết thúc trò chuyện (đổi trạng thái conversation sang 'closed')
+exports.endConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.body;
+    if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ error: 'conversationId không hợp lệ' });
+    }
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Không tìm thấy cuộc trò chuyện' });
+    }
+    if (conversation.status === 'closed') {
+      return res.status(400).json({ error: 'Cuộc trò chuyện đã kết thúc trước đó' });
+    }
+    conversation.status = 'closed';
+    await conversation.save();
+    res.status(200).json({ success: true, message: 'Đã kết thúc trò chuyện', data: conversation });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Tạo mới cuộc trò chuyện giữa customer và nhân viên marketing ngẫu nhiên
+exports.createConversation = async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    const CUSTOMER = 1;
+    const MARKETING = 4;
+
+    // Validate customerId
+    if (!customerId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'customerId là bắt buộc' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'customerId không hợp lệ' 
+      });
+    }
+
+    // Kiểm tra customer có tồn tại và có role CUSTOMER
+    const customer = await User.findOne({ _id: customerId, role: CUSTOMER });
+    if (!customer) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Không tìm thấy user CUSTOMER hoặc user không có quyền CUSTOMER' 
+      });
+    }
+
+    // Kiểm tra customer đã có conversation active chưa
+    const existingConversation = await Conversation.findOne({
+      customerId: customerId,
+      status: 'active'
+    }).populate('customerId', 'name email').populate('staffId', 'name email');
+
+    if (existingConversation) {
+      return res.status(200).json({
+        success: true,
+        data: existingConversation,
+        message: 'Customer đã có cuộc trò chuyện đang hoạt động'
+      });
+    }
+
+    // Tìm nhân viên marketing phù hợp nhất
+    const bestMarketing = await findBestMarketingStaff();
+    if (!bestMarketing) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Hiện tại không có nhân viên marketing nào để hỗ trợ' 
+      });
+    }
+
+    // Tạo conversation mới
+    const conversation = new Conversation({
+      customerId: customer._id,
+      staffId: bestMarketing._id,
+      status: 'active'
+    });
+
+    await conversation.save();
+    
+    // Populate thông tin user
+    await conversation.populate('customerId', 'name email');
+    await conversation.populate('staffId', 'name email');
+
+    return res.status(201).json({
+      success: true,
+      data: conversation,
+      message: 'Tạo cuộc trò chuyện mới thành công'
+    });
+
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    return res.status(500).json({ 
+      success: false,
+      error: 'Lỗi server khi tạo cuộc trò chuyện' 
+    });
+  }
+};
+
+// Hàm tìm nhân viên marketing phù hợp nhất
+async function findBestMarketingStaff() {
+  try {
+    const MARKETING = 4;
+    
+    // Lấy tất cả nhân viên marketing
+    const marketingUsers = await User.find({ role: MARKETING });
+    if (marketingUsers.length === 0) {
+      return null;
+    }
+
+    const marketingIds = marketingUsers.map(m => m._id);
+
+    // Lấy thống kê conversation của từng marketing
+    const conversationStats = await Conversation.aggregate([
+      { 
+        $match: { 
+          staffId: { $in: marketingIds },
+          status: 'active'
+        } 
+      },
+      {
+        $group: {
+          _id: "$staffId",
+          conversationCount: { $sum: 1 },
+          lastActivity: { $max: "$lastMessageAt" }
+        }
+      }
+    ]);
+
+    // Tạo map thống kê
+    const statsMap = new Map();
+    conversationStats.forEach(stat => {
+      statsMap.set(String(stat._id), {
+        conversationCount: stat.conversationCount,
+        lastActivity: stat.lastActivity
+      });
+    });
+
+    // Gắn thống kê và trạng thái online vào từng marketing
+    const marketingWithStats = marketingUsers.map(marketing => {
+      const stats = statsMap.get(String(marketing._id)) || {
+        conversationCount: 0,
+        lastActivity: new Date(0)
+      };
+      
+      // Giả sử có field isOnline hoặc lastSeen để kiểm tra trạng thái online
+      // Bạn có thể thay đổi logic này theo cách bạn lưu trữ trạng thái online
+      const isOnline = checkUserOnlineStatus(marketing._id.toString());
+      
+      return {
+        user: marketing,
+        conversationCount: stats.conversationCount,
+        lastActivity: stats.lastActivity,
+        isOnline: isOnline
+      };
+    });
+
+    // Bước 1: Ưu tiên người online
+    const onlineUsers = marketingWithStats.filter(m => m.isOnline);
+    let candidates = onlineUsers.length > 0 ? onlineUsers : marketingWithStats;
+
+    // Bước 2: Trong số người online (hoặc tất cả nếu không ai online), chọn người có ít conversation nhất
+    const minConversationCount = Math.min(...candidates.map(m => m.conversationCount));
+    candidates = candidates.filter(m => m.conversationCount === minConversationCount);
+
+    // Bước 3: Nếu nhiều người có cùng số conversation, chọn người có hoạt động lâu nhất
+    if (candidates.length > 1) {
+      const oldestActivity = Math.min(...candidates.map(m => new Date(m.lastActivity).getTime()));
+      candidates = candidates.filter(m => new Date(m.lastActivity).getTime() === oldestActivity);
+    }
+
+    // Bước 4: Nếu vẫn nhiều người, chọn random
+    const selectedMarketing = candidates[Math.floor(Math.random() * candidates.length)];
+
+    return selectedMarketing.user;
+
+  } catch (error) {
+    console.error('Error in findBestMarketingStaff:', error);
+    // Fallback: chọn random nếu có lỗi
+    const marketingUsers = await User.find({ role: MARKETING });
+    return marketingUsers.length > 0 ? marketingUsers[Math.floor(Math.random() * marketingUsers.length)] : null;
+  }
+}
+
+// Hàm kiểm tra trạng thái online của user bằng Socket.IO
+function checkUserOnlineStatus(userId) {
+  try {
+    return isUserOnline(userId);
+  } catch (error) {
+    console.error('Error checking user online status via Socket.IO:', error);
+    return false; // Mặc định offline nếu có lỗi
+  }
+}

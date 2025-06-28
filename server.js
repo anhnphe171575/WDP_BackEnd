@@ -10,6 +10,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
+const { setupSocket, getIO } = require('./config/socket.io');
 
 const blogRoute = require('./routes/blogRoute');
 const productRoute = require('./routes/productRoute');
@@ -19,7 +20,6 @@ const authRoute = require('./routes/authRoute');
 const userRoute = require('./routes/userRoute'); 
 const voucherRoute = require('./routes/voucherRoute');
 const orderRoute = require('./routes/orderRoute')
-const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 const cartRoute = require('./routes/cartRoute');
 const reviewRoute = require('./routes/reviewRoute');
 const paymentRoute = require('./routes/paymentRoute');
@@ -29,12 +29,11 @@ const wishlistRoute = require('./routes/wishlistRoute');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 // Initialize Socket.IO
 setupSocket(server);
 // Middleware to make io available in req
 app.use((req, res, next) => {
-    req.io = io;
+    req.io = getIO();
     next();
 });
 

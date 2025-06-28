@@ -9,10 +9,13 @@ router.post('/', auth, messageController.sendMessage);
 // Lấy tin nhắn theo conversationId
 router.get('/:conversationId', auth, messageController.getMessagesByConversation);
 
-// Tạo mới hoặc lấy conversation 1-1 giữa 2 user
-router.post('/conversation', auth, messageController.createOrGetConversation);
+// Tạo mới conversation 1-1 giữa 2 user
+router.post('/conversation', auth, messageController.createConversation);
 
 // Lấy danh sách conversation của 1 user
 router.get('/conversation/:userId', auth, messageController.getConversationsByUser);
+
+// Kết thúc trò chuyện với khách hàng
+router.post('/end-conversation', auth, messageController.endConversation);
 
 module.exports = router;

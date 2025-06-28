@@ -59,9 +59,11 @@ function setupSocket(server) {
         const conversation = await Conversation.findById(conversationId);
         const recipients = [conversation.customerId, conversation.staffId];
         
-        io.to(recipients).emit('newMessage', {
-          message: newMessage,
-          conversationId
+        recipients.forEach(userId => {
+          io.to(userId.toString()).emit('newMessage', {
+            message: newMessage,
+            conversationId
+          });
         });
 
       } catch (error) {
@@ -121,8 +123,20 @@ function getIO() {
   return io;
 }
 
+// Hàm lấy danh sách user đang online
+function getOnlineUsers() {
+  return Array.from(userSockets.keys());
+}
+
+// Hàm kiểm tra user có online không
+function isUserOnline(userId) {
+  return userSockets.has(userId.toString());
+}
+
 module.exports = {
   setupSocket,
   getIO,
+  getOnlineUsers,
+  isUserOnline
 };
  
