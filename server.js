@@ -10,6 +10,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
+const { setupSocket, getIO } = require('./config/socket.io');
 
 const blogRoute = require('./routes/blogRoute');
 const productRoute = require('./routes/productRoute');
@@ -19,7 +20,6 @@ const authRoute = require('./routes/authRoute');
 const userRoute = require('./routes/userRoute'); 
 const voucherRoute = require('./routes/voucherRoute');
 const orderRoute = require('./routes/orderRoute')
-const { setupSocket } = require('./config/socket.io');  // Import socket.io setup
 const cartRoute = require('./routes/cartRoute');
 const reviewRoute = require('./routes/reviewRoute');
 const paymentRoute = require('./routes/paymentRoute');
@@ -27,16 +27,16 @@ const messageRoute = require('./routes/messageRoute');
 const attributeRoute = require('./routes/attributeRoute');
 const wishlistRoute = require('./routes/wishlistRoute');
 const notifiRoute = require('./routes/notificationRoute');
+const chatbotRoute = require('./routes/chatbotRoute');
 
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 // Initialize Socket.IO
 setupSocket(server);
 // Middleware to make io available in req
 app.use((req, res, next) => {
-    req.io = io;
+    req.io = getIO();
     next();
 });
 
@@ -83,6 +83,7 @@ app.use('/api/payment',paymentRoute);
 app.use('/api/messages', messageRoute);
 app.use('/api/wishlist', wishlistRoute);
 app.use('/api/notification', notifiRoute);
+app.use('/api/chatbot', chatbotRoute);
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);

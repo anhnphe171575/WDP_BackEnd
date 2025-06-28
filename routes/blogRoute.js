@@ -265,7 +265,7 @@ const {
  */
 
 // Create blog - POST /api/blogs
-router.post('/',  upload.array('images', 5) , createBlog);
+router.post('/', verifyToken, upload.array('images', 5), createBlog);
 
 router.get('/', getAllBlogs);
 
@@ -273,7 +273,7 @@ router.get('/', getAllBlogs);
 router.get('/:id', getBlog);
 
 
-router.put('/:id', upload.array('images', 5), updateBlog);
+router.put('/:id', verifyToken, upload.array('images', 5), updateBlog);
 
 
 router.delete('/:id', verifyToken, deleteBlog);
