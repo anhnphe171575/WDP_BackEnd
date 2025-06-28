@@ -6,6 +6,91 @@ router.get('/dashboard', orderController.getOrdersDashboard);
 
 /**
  * @swagger
+ * /api/orders/revenue:
+ *   get:
+ *     summary: Lấy thông tin tổng doanh thu và thống kê doanh thu
+ *     tags: [Orders]
+ *     responses:
+ *       200:
+ *         description: Thông tin doanh thu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalRevenue:
+ *                   type: number
+ *                   description: Tổng doanh thu từ tất cả đơn hàng đã hoàn thành
+ *                 totalOrderCount:
+ *                   type: number
+ *                   description: Tổng số đơn hàng đã hoàn thành
+ *                 currentMonthRevenue:
+ *                   type: number
+ *                   description: Doanh thu tháng hiện tại
+ *                 currentMonthOrderCount:
+ *                   type: number
+ *                   description: Số đơn hàng tháng hiện tại
+ *                 previousMonthRevenue:
+ *                   type: number
+ *                   description: Doanh thu tháng trước
+ *                 previousMonthOrderCount:
+ *                   type: number
+ *                   description: Số đơn hàng tháng trước
+ *                 monthlyGrowthPercentage:
+ *                   type: string
+ *                   description: Phần trăm tăng trưởng so với tháng trước
+ *                 revenueByMonth:
+ *                   type: array
+ *                   description: Doanh thu theo từng tháng trong năm hiện tại
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: number
+ *                         description: Tháng (1-12)
+ *                       monthlyRevenue:
+ *                         type: number
+ *                         description: Doanh thu tháng
+ *                       orderCount:
+ *                         type: number
+ *                         description: Số đơn hàng tháng
+ *                 revenueByYear:
+ *                   type: array
+ *                   description: Doanh thu theo từng năm
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: number
+ *                         description: Năm
+ *                       yearlyRevenue:
+ *                         type: number
+ *                         description: Doanh thu năm
+ *                       orderCount:
+ *                         type: number
+ *                         description: Số đơn hàng năm
+ *                 revenueByStatus:
+ *                   type: array
+ *                   description: Doanh thu theo trạng thái đơn hàng
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         description: Trạng thái đơn hàng
+ *                       revenue:
+ *                         type: number
+ *                         description: Doanh thu theo trạng thái
+ *                       orderCount:
+ *                         type: number
+ *                         description: Số đơn hàng theo trạng thái
+ *       500:
+ *         description: Lỗi server
+ */
+router.get('/revenue', orderController.getTotalRevenue);
+
+/**
+ * @swagger
  * components:
  *   schemas:
  *     Order:

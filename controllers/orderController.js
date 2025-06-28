@@ -54,7 +54,7 @@ exports.getAllOrders = async (req, res) => {
                     }
                 ]
             })
-            .populate('voucher');
+            .populate('voucher').sort({ createAt: -1 });
         res.status(200).json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -169,7 +169,6 @@ exports.getOrdersDashboard = async (req, res) => {
         // 2. Build resultStatusByYear: đủ 12 tháng và đủ status
         const statusYearsSet = new Set(ordersStatusByYearMonth.map(item => item._id.year));
         const statusYears = Array.from(statusYearsSet).sort();
-
         const resultStatusByYear = statusYears.map(year => {
             const months = Array.from({ length: 12 }, (_, i) => {
                 const statuses = allStatuses.map(status => ({
@@ -607,6 +606,150 @@ exports.getOrderByUserId = async (req, res) => {
             })
             .populate('voucher');
         res.status(200).json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get total revenue
+exports.getTotalRevenue = async (req, res) => {
+    try {
+        // Tính tổng doanh thu từ các đơn hàng đã hoàn thành
+        const totalRevenue = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Tính doanh thu theo từng tháng trong năm hiện tại
+        const currentYear = new Date().getFullYear();
+        const revenueByMonth = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createAt: {
+                        $gte: new Date(currentYear, 0, 1),
+                        $lt: new Date(currentYear + 1, 0, 1)
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: { $month: '$createAt' },
+                    monthlyRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // Tính doanh thu theo từng năm
+        const revenueByYear = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed'
+                }
+            },
+            {
+                $group: {
+                    _id: { $year: '$createAt' },
+                    yearlyRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // Tính doanh thu theo trạng thái đơn hàng
+        const revenueByStatus = await Order.aggregate([
+            {
+                $group: {
+                    _id: '$status',
+                    revenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { 'revenue': -1 }
+            }
+        ]);
+
+        // Tính doanh thu của tháng hiện tại
+        const currentMonth = new Date().getMonth();
+        const currentMonthRevenue = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createAt: {
+                        $gte: new Date(currentYear, currentMonth, 1),
+                        $lt: new Date(currentYear, currentMonth + 1, 1)
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    currentMonthRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Tính doanh thu của tháng trước
+        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        const previousMonthRevenue = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createAt: {
+                        $gte: new Date(previousMonthYear, previousMonth, 1),
+                        $lt: new Date(previousMonthYear, previousMonth + 1, 1)
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    previousMonthRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const result = {
+            totalRevenue: totalRevenue[0]?.totalRevenue || 0,
+            totalOrderCount: totalRevenue[0]?.orderCount || 0,
+            currentMonthRevenue: currentMonthRevenue[0]?.currentMonthRevenue || 0,
+            currentMonthOrderCount: currentMonthRevenue[0]?.orderCount || 0,
+            previousMonthRevenue: previousMonthRevenue[0]?.previousMonthRevenue || 0,
+            previousMonthOrderCount: previousMonthRevenue[0]?.orderCount || 0,
+            revenueByMonth: revenueByMonth,
+            revenueByYear: revenueByYear,
+            revenueByStatus: revenueByStatus
+        };
+
+        // Tính phần trăm tăng trưởng so với tháng trước
+        if (result.previousMonthRevenue > 0) {
+            result.monthlyGrowthPercentage = ((result.currentMonthRevenue - result.previousMonthRevenue) / result.previousMonthRevenue * 100).toFixed(2);
+        } else {
+            result.monthlyGrowthPercentage = 0;
+        }
+
+        res.status(200).json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

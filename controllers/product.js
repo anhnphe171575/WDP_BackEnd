@@ -5,6 +5,7 @@ const Attribute = require('../models/attribute'); // adjust path as needed
 const Category = require('../models/category');
 const ProductVariant = require('../models/productVariant');
 const {cloudinary} = require('../config/cloudinary');
+const OrderItem = require('../models/orderItem');
 
 // Get top 5 best-selling products or 5 most recent products if no sales
 const getTopSellingProducts = async (req, res) => {
@@ -1570,7 +1571,69 @@ const deleteImportBatch = async (req, res) => {
     }
 };
 
-
+// Get top 5 worst-selling products (including those with zero sales)
+const getAllWorstSellingProducts = async (req, res) => {
+    try {
+        // 1. Get all products and their total sold (including zero sales)
+        // First, aggregate sales per product
+        const sales = await Order.aggregate([
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetails'
+                }
+            },
+            { $unwind: '$orderItemDetails' },
+            {
+                $group: {
+                    _id: '$orderItemDetails.productId',
+                    totalSold: { $sum: '$orderItemDetails.quantity' }
+                }
+            }
+        ]);
+        // Map productId to totalSold
+        const salesMap = {};
+        sales.forEach(s => {
+            if (s._id) salesMap[s._id.toString()] = s.totalSold;
+        });
+        // 2. Get all products
+        const allProducts = await Product.find();
+        // 3. Attach totalSold to each product (default 0 if not sold)
+        const productsWithSales = allProducts.map(p => ({
+            _id: p._id,
+            name: p.name,
+            description: p.description,
+            brand: p.brand,
+            category: p.category,
+            totalSold: salesMap[p._id.toString()] || 0
+        }));
+        // 4. Sort ascending and take 5
+        const worstProducts = productsWithSales.sort((a, b) => a.totalSold - b.totalSold).slice(0, 5);
+        // 5. Populate variants and attributes for each product
+        const populated = await Promise.all(worstProducts.map(async (prod) => {
+            const variants = await ProductVariant.find({ product_id: prod._id })
+                .populate({
+                    path: 'attribute',
+                    select: 'value description',
+                    populate: { path: 'parentId', select: 'value' }
+                });
+            return { ...prod, variants };
+        }));
+        res.status(200).json({
+            success: true,
+            data: populated
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error getting worst selling products',
+            error: error.message
+        });
+    }
+};
 
 module.exports = {
     getTopSellingProducts,
@@ -1592,5 +1655,6 @@ module.exports = {
     updateImportBatch,
     deleteImportBatch,
     getAllBestSellingProducts,
-    getProductsBySearch
+    getProductsBySearch,
+    getAllWorstSellingProducts
 };
