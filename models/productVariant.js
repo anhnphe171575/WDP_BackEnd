@@ -10,7 +10,8 @@ const productVariantSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Attribute'
   }],
-  sellPrice: { type: Number, required: false, default: 0 }
+  sellPrice: { type: Number, required: false, default: 0 },
+  costPrice: { type: Number, required: false, default: 0 }
 });
 
 module.exports = mongoose.model('ProductVariant', productVariantSchema);

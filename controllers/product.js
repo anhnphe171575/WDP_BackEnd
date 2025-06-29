@@ -1635,6 +1635,46 @@ const getAllWorstSellingProducts = async (req, res) => {
     }
 };
 
+// Cập nhật costPrice cho product variant
+const updateProductVariantCostPrice = async (req, res) => {
+  try {
+    const { variantId } = req.params;
+    const { costPrice } = req.body;
+
+    if (!costPrice || costPrice < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cost price phải là số dương'
+      });
+    }
+
+    const variant = await ProductVariant.findById(variantId);
+    if (!variant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy product variant'
+      });
+    }
+
+    variant.costPrice = costPrice;
+    await variant.save();
+
+    res.json({
+      success: true,
+      message: 'Cập nhật cost price thành công',
+      data: variant
+    });
+
+  } catch (error) {
+    console.error('Error updating cost price:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
     getTopSellingProducts,
     getProductsByCategory,
@@ -1656,5 +1696,6 @@ module.exports = {
     deleteImportBatch,
     getAllBestSellingProducts,
     getProductsBySearch,
-    getAllWorstSellingProducts
+    getAllWorstSellingProducts,
+    updateProductVariantCostPrice
 };

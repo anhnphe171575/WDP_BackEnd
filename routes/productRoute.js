@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch } = require('../controllers/product');
+const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch, updateProductVariantCostPrice } = require('../controllers/product');
 const { upload } = require('../config/cloudinary');
 
 /**
@@ -33,5 +33,8 @@ router.get('/import-batches/:variantId', getImportBatchesByVariantId);
 router.post('/import-batches/:variantId', createImportBatch);
 router.put('/import-batches/:batchId', updateImportBatch);
 router.delete('/import-batches/:batchId', deleteImportBatch);
+
+// Route cập nhật costPrice cho product variant
+router.put('/variant/:variantId/cost-price', updateProductVariantCostPrice);
 
 module.exports = router;

@@ -28,6 +28,7 @@ const attributeRoute = require('./routes/attributeRoute');
 const wishlistRoute = require('./routes/wishlistRoute');
 const notifiRoute = require('./routes/notificationRoute');
 const chatbotRoute = require('./routes/chatbotRoute');
+const statisticsRoute = require('./routes/statisticsRoute');
 
 
 const app = express();
@@ -84,6 +85,7 @@ app.use('/api/messages', messageRoute);
 app.use('/api/wishlist', wishlistRoute);
 app.use('/api/notification', notifiRoute);
 app.use('/api/chatbot', chatbotRoute);
+app.use('/api/statistics', statisticsRoute);
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
