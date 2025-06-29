@@ -1,25 +1,87 @@
+const mongoose = require('mongoose');
 const Review = require('../models/reviewModel');
+const Order = require('../models/order');
+const OrderItem = require('../models/orderItem');
 
 // Create a new review
 exports.createReview = async (req, res) => {
     try {
-        const { userId, productId, rating, comment, images } = req.body;
-        
+        console.log(req.body);
+        const { productId, rating, comment } = req.body;
+        const images = req.files ? req.files.map(file => ({ url: file.path })) : [];
+        const userId = req.user.id; // Lấy userId từ middleware auth
+
+        // Validation
+        if (!productId || !rating) {
+            return res.status(400).json({
+                success: false,
+                error: 'Product ID and rating are required'
+            });
+        }
+
+        if (rating < 1 || rating > 5) {
+            return res.status(400).json({
+                success: false,
+                error: 'Rating must be between 1 and 5'
+            });
+        }
+
+        // Kiểm tra xem người dùng đã mua sản phẩm này chưa
+        const hasPurchased = await Order.aggregate([
+            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetails'
+                }
+            },
+            { $unwind: '$orderItemDetails' },
+            { $match: { 'orderItemDetails.productId': new mongoose.Types.ObjectId(productId) } }
+        ]);
+
+        if (hasPurchased.length === 0) {
+            return res.status(403).json({
+                success: false,
+                error: 'You can only review products you have purchased'
+            });
+        }
+
+        // Kiểm tra xem người dùng đã review sản phẩm này chưa
+        const existingReview = await Review.findOne({ userId, productId });
+        if (existingReview) {
+            return res.status(400).json({
+                success: false,
+                error: 'You have already reviewed this product'
+            });
+        }
+
+        // Tạo review mới
         const review = new Review({
             userId,
             productId,
             rating,
-            comment,
-            images: images || []
+            comment: comment || '',
+            images: images
         });
 
         const savedReview = await review.save();
+
+        // Populate thông tin user và product để trả về
+        const populatedReview = await Review.findById(savedReview._id)
+            .populate('userId', 'name email')
+            .populate('productId', 'name price');
+
         res.status(201).json({
             success: true,
-            data: savedReview
+            message: 'Review created successfully',
+            data: populatedReview
         });
     } catch (error) {
-        res.status(400).json({
+        console.error('Create review error:', error);
+        res.status(500).json({
             success: false,
             error: error.message
         });
@@ -117,7 +179,8 @@ exports.getReviewById = async (req, res) => {
 // Update review
 exports.updateReview = async (req, res) => {
     try {
-        const { rating, comment, images } = req.body;
+        const { rating, comment } = req.body;
+        const images = req.files ? req.files.map(file => ({ url: file.path })) : undefined;
         const review = await Review.findById(req.params.id);
 
         if (!review) {
@@ -127,17 +190,41 @@ exports.updateReview = async (req, res) => {
             });
         }
 
+        // Kiểm tra quyền sở hữu review
+        if (review.userId.toString() !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'You can only update your own reviews'
+            });
+        }
+
         // Update fields
-        if (rating) review.rating = rating;
-        if (comment) review.comment = comment;
-        if (images) review.images = images;
+        if (rating !== undefined) {
+            if (rating < 1 || rating > 5) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Rating must be between 1 and 5'
+                });
+            }
+            review.rating = rating;
+        }
+        if (comment !== undefined) review.comment = comment;
+        if (images !== undefined) review.images = images;
 
         const updatedReview = await review.save();
+        
+        // Populate thông tin user và product để trả về
+        const populatedReview = await Review.findById(updatedReview._id)
+            .populate('userId', 'name email')
+            .populate('productId', 'name price');
+
         res.status(200).json({
             success: true,
-            data: updatedReview
+            message: 'Review updated successfully',
+            data: populatedReview
         });
     } catch (error) {
+        console.error('Update review error:', error);
         res.status(400).json({
             success: false,
             error: error.message
@@ -157,12 +244,22 @@ exports.deleteReview = async (req, res) => {
             });
         }
 
+        // Kiểm tra quyền sở hữu review
+        if (review.userId.toString() !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'You can only delete your own reviews'
+            });
+        }
+
         await review.deleteOne();
         res.status(200).json({
             success: true,
+            message: 'Review deleted successfully',
             data: {}
         });
     } catch (error) {
+        console.error('Delete review error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -175,7 +272,7 @@ exports.getAverageRating = async (req, res) => {
     try {
         const { productId } = req.params;
         const result = await Review.aggregate([
-            { $match: { productId: mongoose.Types.ObjectId(productId) } },
+            { $match: { productId: new mongoose.Types.ObjectId(productId) } },
             {
                 $group: {
                     _id: '$productId',
@@ -221,6 +318,75 @@ exports.getTotalComments = async (req, res) => {
             data: {
                 productId,
                 totalComments
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+};
+
+// Get products that user has purchased but not reviewed
+exports.getUnreviewedProducts = async (req, res) => {
+    try {
+        const {  productId } = req.params;
+        const userId = req.user.id;
+        // Bước 1: Lấy danh sách sản phẩm đã mua
+        const purchasedProducts = await Order.aggregate([
+            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetails'
+                }
+            },
+            { $unwind: '$orderItemDetails' },
+            // Nếu có productId, lọc theo sản phẩm cụ thể
+            ...(productId ? [{ $match: { 'orderItemDetails.productId': new mongoose.Types.ObjectId(productId) } }] : []),
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'orderItemDetails.productId',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            { $unwind: '$productDetails' },
+            {
+                $group: {
+                    _id: '$orderItemDetails.productId',
+                    productName: { $first: '$productDetails.name' },
+                    productDescription: { $first: '$productDetails.description' },
+                    productBrand: { $first: '$productDetails.brand' },
+                    totalQuantity: { $sum: '$orderItemDetails.quantity' },
+                    lastPurchaseDate: { $max: '$createAt' }
+                }
+            }
+        ]);
+
+        // Bước 2: Lấy danh sách sản phẩm đã review
+        const reviewedProducts = await Review.find({ userId })
+            .distinct('productId');
+
+        // Bước 3: So sánh và tìm sản phẩm chưa được review
+        const unreviewedProducts = purchasedProducts.filter(product => 
+            !reviewedProducts.some(reviewedId => 
+                reviewedId.toString() === product._id.toString()
+            )
+        );
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalPurchasedProducts: purchasedProducts.length,
+                totalReviewedProducts: reviewedProducts.length,
+                unreviewedProducts: unreviewedProducts,
+                unreviewedCount: unreviewedProducts.length
             }
         });
     } catch (error) {

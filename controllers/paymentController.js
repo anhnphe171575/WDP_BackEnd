@@ -12,7 +12,7 @@ const User = require("../models/userModel");
 
 exports.createPayment = async (req, res) => {
   const userId = req.user.id;    
-    const {  addressId, amount, shippingMethod, paymentMethod, items } = req.body;
+    const {  addressId, amount, shippingMethod, paymentMethod, items,rebuyItems } = req.body;
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const timestamp = Date.now() % 1000000; 
     const orderCode = Number(`${timestamp}${randomNum}`.slice(-9)); 
@@ -21,7 +21,7 @@ exports.createPayment = async (req, res) => {
         orderCode,
         amount: amount,
         description: 'Thanh toan don hang',
-        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}`,
+        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}&rebuyItems=${encodeURIComponent(JSON.stringify(rebuyItems))}`,
         cancelUrl: `http://localhost:3000/payment/result`   
     };
     try {
@@ -39,9 +39,9 @@ exports.createPayment = async (req, res) => {
 
 exports.callback = async (req, res) => {
   try {
-    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode } = req.body;
+    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode, rebuyItems } = req.body;
     const userId = req.user?.id || req.body.userId; // Lấy userId từ req nếu có
-    console.log(req.body);
+    console.log("rebuyItems",rebuyItems);
 
     // Parse items từ JSON string nếu cần
     let parsedItems = items;
@@ -52,6 +52,21 @@ exports.callback = async (req, res) => {
         console.error('Error parsing items JSON:', error);
         return res.status(400).json({ message: "Invalid items format" });
       }
+    }
+
+    // Parse rebuyItems từ JSON string nếu cần
+    let parsedRebuyItems = rebuyItems;
+    if (typeof rebuyItems === 'string') {
+      try {
+        parsedRebuyItems = JSON.parse(rebuyItems);
+      } catch (error) {
+        console.error('Error parsing rebuyItems JSON:', error);
+        parsedRebuyItems = [];
+      }
+    }
+    // Đảm bảo parsedRebuyItems là array
+    if (!Array.isArray(parsedRebuyItems)) {
+      parsedRebuyItems = [];
     }
 
     if (code === "00" && status === "PAID" && cancel === "false") {
@@ -116,20 +131,30 @@ exports.callback = async (req, res) => {
         userId: userId,
         OrderItems: orderItemIds,
         total: amount,
-        status: "completed",
+        status: "pending",
         paymentMethod: paymentMethod,
         address: addressObj,
       });
       await newOrder.save();
 
-      // Xóa các cart item khỏi CartItem
-      await CartItem.deleteMany({ _id: { $in: cartItemIds } });
+      // Xác định các cart item cần xóa (loại trừ rebuyItems)
+      const cartItemsToDelete = Array.isArray(parsedRebuyItems) && parsedRebuyItems.length > 0
+        ? cartItemIds.filter(id => !parsedRebuyItems.includes(id.toString()))
+        : cartItemIds;
+      console.log("parsedRebuyItems:", parsedRebuyItems);
+      console.log("cartItemIds:", cartItemIds);
+      console.log("cartItemsToDelete:", cartItemsToDelete);
+      console.log("Should keep items:", parsedRebuyItems);
+      // Xóa các cart item khỏi CartItem (chỉ những item không trong rebuyItems)
+      if (cartItemsToDelete.length > 0) {
+        await CartItem.deleteMany({ _id: { $in: cartItemsToDelete } });
 
-      // Xóa các cart item khỏi Cart của user
-      await Cart.updateOne(
-        { userId: userId },
-        { $pull: { cartItems: { $in: cartItemIds } } }
-      );
+        // Xóa các cart item khỏi Cart của user (chỉ những item không trong rebuyItems)
+        await Cart.updateOne(
+          { userId: userId },
+          { $pull: { cartItems: { $in: cartItemsToDelete } } }
+        );
+      }
 
       return res.status(200).json({
         error: 0,
@@ -198,20 +223,30 @@ exports.callback = async (req, res) => {
         userId: userId,
         OrderItems: orderItemIds,
         total: amount,
-        status: "completed",
+        status: "pending",
         paymentMethod: paymentMethod,
         address: addressObj,
       });
       await newOrder.save();
 
-      // Xóa các cart item khỏi CartItem
-      await CartItem.deleteMany({ _id: { $in: cartItemIds } });
-
-      // Xóa các cart item khỏi Cart của user
-      await Cart.updateOne(
-        { userId: userId },
-        { $pull: { cartItems: { $in: cartItemIds } } }
-      );
+      // Xác định các cart item cần xóa (loại trừ rebuyItems)
+      const cartItemsToDelete = Array.isArray(parsedRebuyItems) && parsedRebuyItems.length > 0
+        ? cartItemIds.filter(id => !parsedRebuyItems.includes(id.toString()))
+        : cartItemIds;
+      console.log("parsedRebuyItems:", parsedRebuyItems);
+      console.log("cartItemIds:", cartItemIds);
+      console.log("cartItemsToDelete:", cartItemsToDelete);
+      console.log("Should keep items:", parsedRebuyItems);
+      // Xóa các cart item khỏi CartItem (chỉ những item không trong rebuyItems)
+      if (cartItemsToDelete.length > 0) {
+        await CartItem.deleteMany({ _id: { $in: cartItemsToDelete } });
+ 
+        // Xóa các cart item khỏi Cart của user (chỉ những item không trong rebuyItems)
+        await Cart.updateOne(
+          { userId: userId },
+          { $pull: { cartItems: { $in: cartItemsToDelete } } }
+        );
+      }
 
       return res.status(200).json({
         error: 0,

@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const reviewController = require('../controllers/reviewController');
 const verifyToken = require('../middleware/auth');
-
+const { upload } = require('../config/cloudinary');
 // Create a new review
-router.post('/', verifyToken, reviewController.createReview);
+router.post('/', verifyToken, upload.array('images', 5), reviewController.createReview);
 
 // Get all reviews
 router.get('/', reviewController.getAllReviews);
@@ -19,7 +19,7 @@ router.get('/user/:userId', reviewController.getReviewsByUser);
 router.get('/:id', reviewController.getReviewById);
 
 // Update review
-router.put('/:id', verifyToken, reviewController.updateReview);
+router.put('/:id', verifyToken, upload.array('images', 5), reviewController.updateReview);
 
 // Delete review
 router.delete('/:id', verifyToken, reviewController.deleteReview);
@@ -29,5 +29,8 @@ router.get('/rating/:productId', reviewController.getAverageRating);
 
 // Get total comments count for a product
 router.get('/comments/:productId', reviewController.getTotalComments);
+
+// Get unreviewed products for a user
+router.get('/unreviewed/:productId', verifyToken, reviewController.getUnreviewedProducts);
 
 module.exports = router;
