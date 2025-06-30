@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch, updateProductVariantCostPrice } = require('../controllers/product');
 const { upload } = require('../config/cloudinary');
+const  verifyToken  = require('../middleware/auth');
+const  authorizeRoles = require('../middleware/authorization');
 
 /**
  * @swagger
@@ -19,13 +21,14 @@ router.get('/top-selling', getTopSellingProducts);
  */
 router.get('/search/:search', getProductsBySearch);
 
+
 /**
  * @swagger
  * /products:
  *   get:
  *     summary: Lấy tất cả sản phẩm
  */
-router.get('/',getAllProducts);
+router.get('/',verifyToken,authorizeRoles(0),getAllProducts);
 
 /**
  * @swagger
@@ -33,7 +36,7 @@ router.get('/',getAllProducts);
  *   get:
  *     summary: Lấy các biến thể sản phẩm theo productId
  */
-router.get('/product-variant/:productId',getProductVariantsByProductId);
+router.get('/product-variant/:productId',verifyToken,authorizeRoles(0),getProductVariantsByProductId);
 
 /**
  * @swagger
@@ -41,7 +44,7 @@ router.get('/product-variant/:productId',getProductVariantsByProductId);
  *   get:
  *     summary: Lấy thuộc tính con theo productId
  */
-router.get('/child-attributes/:productId',getChildAttributesByProductId);
+router.get('/child-attributes/:productId',verifyToken,authorizeRoles(0),getChildAttributesByProductId);
 
 /**
  * @swagger
@@ -145,7 +148,7 @@ router.get('/worst-selling', getAllWorstSellingProducts);
  *   get:
  *     summary: Lấy danh sách lô nhập theo variantId
  */
-router.get('/import-batches/:variantId', getImportBatchesByVariantId);
+router.get('/import-batches/:variantId',verifyToken,authorizeRoles(0), getImportBatchesByVariantId);
 
 /**
  * @swagger

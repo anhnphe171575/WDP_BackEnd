@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const attributeController = require('../controllers/attributeController');
-
+const  verifyToken  = require('../middleware/auth');
+const  authorizeRoles = require('../middleware/authorization');
 /**
  * @swagger
  * /attributes:
  *   get:
  *     summary: Lấy danh sách attribute (có filter)
  */
-router.get('/', attributeController.getAttributes);
+router.get('/',verifyToken,authorizeRoles(0), attributeController.getAttributes);
 
 /**
  * @swagger
@@ -16,7 +17,7 @@ router.get('/', attributeController.getAttributes);
  *   get:
  *     summary: Lấy tree attribute
  */
-router.get('/tree', attributeController.getAttributeTree);
+router.get('/tree',verifyToken,authorizeRoles(0), attributeController.getAttributeTree);
 
 /**
  * @swagger
@@ -24,7 +25,7 @@ router.get('/tree', attributeController.getAttributeTree);
  *   get:
  *     summary: Lấy chi tiết attribute
  */
-router.get('/:id', attributeController.getAttributeById);
+router.get('/:id',verifyToken,authorizeRoles(0), attributeController.getAttributeById);
 
 /**
  * @swagger

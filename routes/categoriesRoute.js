@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getAllCategoriesPopular, getParentCategories,   getChildCategories, getCategoryChildrenById, getAttributesByCategoryId,getChildCategoriesByParentId, createCategory, createChildCategory, updateCategory, deleteCategory } = require('../controllers/categories');
 const { upload } = require('../config/cloudinary');
+const  verifyToken  = require('../middleware/auth');
+const  authorizeRoles = require('../middleware/authorization');
 
 /**
  * @swagger
