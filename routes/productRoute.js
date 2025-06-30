@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch, updateProductVariantCostPrice } = require('../controllers/product');
 const { upload } = require('../config/cloudinary');
+const  verifyToken  = require('../middleware/auth');
+const  authorizeRoles = require('../middleware/authorization');
 
 /**
  * @swagger     
@@ -14,7 +16,7 @@ const { upload } = require('../config/cloudinary');
  */
 router.get('/top-selling', getTopSellingProducts);
 router.get('/search/:search', getProductsBySearch);
-router.get('/',getAllProducts);
+router.get('/',verifyToken,authorizeRoles(0),getAllProducts);
 router.get('/product-variant/:productId',getProductVariantsByProductId);
 router.get('/child-attributes/:productId',getChildAttributesByProductId);
 router.get('/child-attributes/parent/:parentId', getChildAttributesByParentId);

@@ -267,8 +267,9 @@ const {
 // Create blog - POST /api/blogs
 router.post('/', verifyToken, upload.array('images', 5), createBlog);
 
-router.get('/', getAllBlogs);
+router.get('/marketing', verifyToken,authorizeRoles(4), getAllBlogs);
 
+router.get('/customer', verifyToken,authorizeRoles(1), getAllBlogs);
 
 router.get('/:id', getBlog);
 
