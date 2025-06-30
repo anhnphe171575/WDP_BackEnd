@@ -687,3 +687,358 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
+// Get user dashboard statistics
+exports.getUserDashboard = async (req, res) => {
+    try {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+
+        // 1. Thống kê user đăng ký theo tháng trong năm hiện tại
+        const userRegistrationByMonth = await User.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: new Date(currentYear, 0, 1),
+                        $lt: new Date(currentYear + 1, 0, 1)
+                    },
+                    role: { $ne: 0 } // Loại trừ admin developer
+                }
+            },
+            {
+                $group: {
+                    _id: { $month: '$createdAt' },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // 1.1. Thống kê user đăng ký theo tháng trong năm trước
+        const userRegistrationByMonthLastYear = await User.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: new Date(currentYear - 1, 0, 1),
+                        $lt: new Date(currentYear, 0, 1)
+                    },
+                    role: { $ne: 0 } // Loại trừ admin developer
+                }
+            },
+            {
+                $group: {
+                    _id: { $month: '$createdAt' },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // 1.2. Thống kê user đăng ký theo tháng trong năm 2 năm trước
+        const userRegistrationByMonthTwoYearsAgo = await User.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: new Date(currentYear - 2, 0, 1),
+                        $lt: new Date(currentYear - 1, 0, 1)
+                    },
+                    role: { $ne: 0 } // Loại trừ admin developer
+                }
+            },
+            {
+                $group: {
+                    _id: { $month: '$createdAt' },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // 2. Thống kê user đăng ký theo năm
+        const userRegistrationByYear = await User.aggregate([
+            {
+                $match: {
+                    role: { $ne: 0 } // Loại trừ admin developer
+                }
+            },
+            {
+                $group: {
+                    _id: { $year: '$createdAt' },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            }
+        ]);
+
+        // 3. Top khách hàng mua hàng nhiều nhất (theo tổng giá trị đơn hàng)
+        const topCustomersByRevenue = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed'
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId',
+                    totalRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 },
+                    averageOrderValue: { $avg: '$total' }
+                }
+            },
+            {
+                $sort: { 'totalRevenue': -1 }
+            },
+            {
+                $limit: 10
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userInfo'
+                }
+            },
+            {
+                $unwind: '$userInfo'
+            },
+            {
+                $project: {
+                    userId: '$_id',
+                    userName: '$userInfo.name',
+                    userEmail: '$userInfo.email',
+                    totalRevenue: 1,
+                    orderCount: 1,
+                    averageOrderValue: 1
+                }
+            }
+        ]);
+
+        // 4. Top khách hàng mua hàng nhiều nhất (theo số lượng đơn hàng)
+        const topCustomersByOrderCount = await Order.aggregate([
+            {
+                $match: {
+                    status: 'completed'
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId',
+                    totalRevenue: { $sum: '$total' },
+                    orderCount: { $sum: 1 },
+                    averageOrderValue: { $avg: '$total' }
+                }
+            },
+            {
+                $sort: { 'orderCount': -1 }
+            },
+            {
+                $limit: 10
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userInfo'
+                }
+            },
+            {
+                $unwind: '$userInfo'
+            },
+            {
+                $project: {
+                    userId: '$_id',
+                    userName: '$userInfo.name',
+                    userEmail: '$userInfo.email',
+                    totalRevenue: 1,
+                    orderCount: 1,
+                    averageOrderValue: 1
+                }
+            }
+        ]);
+
+        // 5. Top user cancel hàng nhiều nhất
+        const topUsersByCancellations = await Order.aggregate([
+            {
+                $match: {
+                    status: 'cancelled'
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId',
+                    cancelledOrderCount: { $sum: 1 },
+                    totalCancelledValue: { $sum: '$total' }
+                }
+            },
+            {
+                $sort: { 'cancelledOrderCount': -1 }
+            },
+            {
+                $limit: 10
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userInfo'
+                }
+            },
+            {
+                $unwind: '$userInfo'
+            },
+            {
+                $project: {
+                    userId: '$_id',
+                    userName: '$userInfo.name',
+                    userEmail: '$userInfo.email',
+                    cancelledOrderCount: 1,
+                    totalCancelledValue: 1
+                }
+            }
+        ]);
+
+        // 6. Thống kê tổng quan
+        const totalUsers = await User.countDocuments({ role: { $ne: 0 } });
+        const totalVerifiedUsers = await User.countDocuments({ 
+            role: { $ne: 0 }, 
+            verified: true 
+        });
+        const totalUnverifiedUsers = await User.countDocuments({ 
+            role: { $ne: 0 }, 
+            verified: false 
+        });
+
+        // 7. Thống kê user theo role
+        const usersByRole = await User.aggregate([
+            {
+                $match: {
+                    role: { $ne: 0 }
+                }
+            },
+            {
+                $group: {
+                    _id: '$role',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // 8. Thống kê user mới trong tháng hiện tại
+        const currentMonthUsers = await User.countDocuments({
+            createdAt: {
+                $gte: new Date(currentYear, currentMonth, 1),
+                $lt: new Date(currentYear, currentMonth + 1, 1)
+            },
+            role: { $ne: 0 }
+        });
+
+        // 9. Thống kê user mới trong tháng trước
+        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        const previousMonthUsers = await User.countDocuments({
+            createdAt: {
+                $gte: new Date(previousMonthYear, previousMonth, 1),
+                $lt: new Date(previousMonthYear, previousMonth + 1, 1)
+            },
+            role: { $ne: 0 }
+        });
+
+        // 10. Tạo mảng đầy đủ 12 tháng cho user registration
+        const fullUserRegistrationByMonth = Array.from({ length: 12 }, (_, i) => {
+            const monthData = userRegistrationByMonth.find(item => item._id === i + 1);
+            return {
+                month: i + 1,
+                count: monthData ? monthData.count : 0
+            };
+        });
+
+        // 10.1. Tạo mảng đầy đủ 12 tháng cho năm trước
+        const fullUserRegistrationByMonthLastYear = Array.from({ length: 12 }, (_, i) => {
+            const monthData = userRegistrationByMonthLastYear.find(item => item._id === i + 1);
+            return {
+                month: i + 1,
+                count: monthData ? monthData.count : 0
+            };
+        });
+
+        // 10.2. Tạo mảng đầy đủ 12 tháng cho 2 năm trước
+        const fullUserRegistrationByMonthTwoYearsAgo = Array.from({ length: 12 }, (_, i) => {
+            const monthData = userRegistrationByMonthTwoYearsAgo.find(item => item._id === i + 1);
+            return {
+                month: i + 1,
+                count: monthData ? monthData.count : 0
+            };
+        });
+
+        // 11. Khách hàng tiềm năng (chưa có order nào)
+        const usersWithOrders = await Order.distinct('userId');
+
+        const totalPotentialCustomers = await User.countDocuments({
+            _id: { $nin: usersWithOrders },
+            role: 1
+        });
+
+        const potentialCustomersList = await User.find({
+            _id: { $nin: usersWithOrders },
+            role: 1
+        })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('name email phone createdAt verified')
+        .lean();
+
+        const result = {
+            // Tổng quan
+            totalUsers,
+            totalVerifiedUsers,
+            totalUnverifiedUsers,
+            currentMonthUsers,
+            previousMonthUsers,
+            userGrowthPercentage: previousMonthUsers > 0 
+                ? ((currentMonthUsers - previousMonthUsers) / previousMonthUsers * 100).toFixed(2)
+                : 0,
+
+            // Thống kê theo thời gian
+            userRegistrationByMonth: fullUserRegistrationByMonth,
+            userRegistrationByMonthLastYear: fullUserRegistrationByMonthLastYear,
+            userRegistrationByMonthTwoYearsAgo: fullUserRegistrationByMonthTwoYearsAgo,
+            userRegistrationByYear,
+
+            // Thống kê theo role
+            usersByRole,
+
+            // Top khách hàng
+            topCustomersByRevenue,
+            topCustomersByOrderCount,
+
+            // Top user cancel
+            topUsersByCancellations,
+
+            // Khách hàng tiềm năng
+            totalPotentialCustomers,
+            potentialCustomers: potentialCustomersList
+        };
+
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('User dashboard error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
