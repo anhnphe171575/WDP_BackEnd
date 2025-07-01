@@ -24,6 +24,170 @@ router.get('/', userController.getAllUsers);
 
 /**
  * @swagger
+ * /api/users/dashboard:
+ *   get:
+ *     summary: Lấy thống kê dashboard quản lý người dùng
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalUsers:
+ *                       type: number
+ *                       description: Tổng số người dùng
+ *                     totalVerifiedUsers:
+ *                       type: number
+ *                       description: Số người dùng đã xác thực
+ *                     totalUnverifiedUsers:
+ *                       type: number
+ *                       description: Số người dùng chưa xác thực
+ *                     currentMonthUsers:
+ *                       type: number
+ *                       description: Số người dùng đăng ký tháng hiện tại
+ *                     previousMonthUsers:
+ *                       type: number
+ *                       description: Số người dùng đăng ký tháng trước
+ *                     userGrowthPercentage:
+ *                       type: string
+ *                       description: Phần trăm tăng trưởng so với tháng trước
+ *                     userRegistrationByMonth:
+ *                       type: array
+ *                       description: Thống kê đăng ký theo tháng trong năm hiện tại
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           month:
+ *                             type: number
+ *                           count:
+ *                             type: number
+ *                     userRegistrationByMonthLastYear:
+ *                       type: array
+ *                       description: Thống kê đăng ký theo tháng trong năm trước
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           month:
+ *                             type: number
+ *                           count:
+ *                             type: number
+ *                     userRegistrationByMonthTwoYearsAgo:
+ *                       type: array
+ *                       description: Thống kê đăng ký theo tháng trong 2 năm trước
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           month:
+ *                             type: number
+ *                           count:
+ *                             type: number
+ *                     userRegistrationByYear:
+ *                       type: array
+ *                       description: Thống kê đăng ký theo năm
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: number
+ *                           count:
+ *                             type: number
+ *                     usersByRole:
+ *                       type: array
+ *                       description: Thống kê người dùng theo role
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: number
+ *                           count:
+ *                             type: number
+ *                     topCustomersByRevenue:
+ *                       type: array
+ *                       description: Top 10 khách hàng mua hàng nhiều nhất theo doanh thu
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           userId:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                           userEmail:
+ *                             type: string
+ *                           totalRevenue:
+ *                             type: number
+ *                           orderCount:
+ *                             type: number
+ *                           averageOrderValue:
+ *                             type: number
+ *                     topCustomersByOrderCount:
+ *                       type: array
+ *                       description: Top 10 khách hàng mua hàng nhiều nhất theo số lượng đơn hàng
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           userId:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                           userEmail:
+ *                             type: string
+ *                           totalRevenue:
+ *                             type: number
+ *                           orderCount:
+ *                             type: number
+ *                           averageOrderValue:
+ *                             type: number
+ *                     topUsersByCancellations:
+ *                       type: array
+ *                       description: Top 10 người dùng hủy hàng nhiều nhất
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           userId:
+ *                             type: string
+ *                           userName:
+ *                             type: string
+ *                           userEmail:
+ *                             type: string
+ *                           cancelledOrderCount:
+ *                             type: number
+ *                           totalCancelledValue:
+ *                             type: number
+ *                     totalPotentialCustomers:
+ *                       type: number
+ *                       description: Tổng số khách hàng tiềm năng (chưa có đơn hàng)
+ *                     potentialCustomers:
+ *                       type: array
+ *                       description: Danh sách 10 khách hàng tiềm năng mới nhất
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           email:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           verified:
+ *                             type: boolean
+ *       500:
+ *         description: Lỗi server
+ */
+router.get('/dashboard', userController.getUserDashboard);
+
+/**
+ * @swagger
  * /api/users/orders:
  *   get:
  *     summary: Lấy tất cả đơn hàng của người dùng hiện tại
