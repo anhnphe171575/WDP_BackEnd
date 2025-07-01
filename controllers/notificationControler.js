@@ -38,3 +38,66 @@ exports.markAsRead = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Lấy chi tiết notification
+exports.getNotificationById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findById(id);
+        if (!notification) {
+            return res.status(404).json({ message: 'Không tìm thấy notification' });
+        }
+        // Kiểm tra quyền truy cập
+        if (notification.userId.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Bạn không có quyền xem notification này' });
+        }
+        res.status(200).json(notification);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Tạo notification mới (dùng cho test hoặc admin)
+exports.createNotification = async (req, res) => {
+    try {
+        const { userId, title, description, type, orderId } = req.body;
+        if (!userId || !title || !type) {
+            return res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+        }
+        const notification = new Notification({ userId, title, description, type, orderId });
+        await notification.save();
+        res.status(201).json(notification);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Xóa notification theo id
+exports.deleteNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findById(id);
+        if (!notification) {
+            return res.status(404).json({ message: 'Không tìm thấy notification' });
+        }
+        // Chỉ cho phép user xóa notification của mình
+        if (notification.userId.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Bạn không có quyền xóa notification này' });
+        }
+        await Notification.findByIdAndDelete(id);
+        res.status(200).json({ message: 'Đã xóa notification thành công' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Xóa tất cả notification của user
+exports.deleteAllNotifications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await Notification.deleteMany({ userId });
+        res.status(200).json({ message: 'Đã xóa tất cả notification của bạn' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
