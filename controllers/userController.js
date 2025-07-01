@@ -866,7 +866,7 @@ exports.getUserDashboard = async (req, res) => {
         ]);
 
         // 5. Top user cancel hàng nhiều nhất
-        const topUsersByCancellations = await Order.aggregate([
+        const topUsersByCancellationsAgg = await Order.aggregate([
             {
                 $match: {
                     status: 'cancelled'
@@ -876,7 +876,8 @@ exports.getUserDashboard = async (req, res) => {
                 $group: {
                     _id: '$userId',
                     cancelledOrderCount: { $sum: 1 },
-                    totalCancelledValue: { $sum: '$total' }
+                    totalCancelledValue: { $sum: '$total' },
+                    orderIds: { $push: '$_id' }
                 }
             },
             {
@@ -902,10 +903,31 @@ exports.getUserDashboard = async (req, res) => {
                     userName: '$userInfo.name',
                     userEmail: '$userInfo.email',
                     cancelledOrderCount: 1,
-                    totalCancelledValue: 1
+                    totalCancelledValue: 1,
+                    orderIds: 1,
+                    //cancel rate / total order
                 }
             }
         ]);
+
+        // For each top user, fetch cancelled order items and their reasons
+        const topUsersByCancellations = await Promise.all(topUsersByCancellationsAgg.map(async user => {
+            // Find all cancelled order items for this user's cancelled orders
+            const cancelledOrderItems = await OrderItem.find({
+                _id: { $in: (await Order.find({ _id: { $in: user.orderIds } }).distinct('OrderItems')) },
+                status: 'cancelled'
+            }).select('reason');
+
+            // Calculate total order count for this user
+            const totalOrderCount = await Order.countDocuments({ userId: user.userId });
+            const cancelRate = totalOrderCount > 0 ? user.cancelledOrderCount / totalOrderCount : 0;
+
+            return {
+                ...user,
+                reasons: cancelledOrderItems.map(item => item.reason).filter(Boolean),
+                cancelRate
+            };
+        }));
 
         // 6. Thống kê tổng quan
         const totalUsers = await User.countDocuments({ role: { $ne: 0 } });
