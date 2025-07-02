@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const verifyToken = require('../middleware/auth');
+const  verifyToken  = require('../middleware/auth');
+const { ROLES } = require('../config/role');
+const  authorizeRoles  = require('../middleware/authorization');
 
 /**
  * @swagger
@@ -184,7 +186,7 @@ router.get('/', userController.getAllUsers);
  *       500:
  *         description: Lỗi server
  */
-router.get('/dashboard', userController.getUserDashboard);
+router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), userController.getUserDashboard);
 
 /**
  * @swagger

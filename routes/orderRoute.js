@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
+const verifyToken = require('../middleware/auth');
+const { ROLES } = require('../config/role');
+const authorizeRoles = require('../middleware/authorization');
 // get orders dashboard
-router.get('/dashboard', orderController.getOrdersDashboard);
+router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getOrdersDashboard);
 
 /**
  * @swagger
@@ -87,7 +90,7 @@ router.get('/dashboard', orderController.getOrdersDashboard);
  *       500:
  *         description: Lỗi server
  */
-router.get('/revenue', orderController.getTotalRevenue);
+router.get('/revenue',verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getTotalRevenue);
 
 /**
  * @swagger
@@ -174,7 +177,7 @@ router.post('/', orderController.createOrder);
  *       500:
  *         description: Lỗi server
  */
-router.get('/', orderController.getAllOrders);
+router.get('/', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getAllOrders);
 
 /**
  * @swagger
@@ -205,7 +208,7 @@ router.get('/', orderController.getAllOrders);
  *       500:
  *         description: Lỗi server
  */
-router.put('/bulk-update-status', orderController.updateBulkStatus);
+router.put('/bulk-update-status', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateBulkStatus);
 
 /**
  * @swagger
@@ -232,7 +235,7 @@ router.put('/bulk-update-status', orderController.updateBulkStatus);
  *       500:
  *         description: Lỗi server
  */
-router.get('/:id', orderController.getOrderById);
+router.get('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getOrderById);
 
 /**
  * @swagger
@@ -270,7 +273,7 @@ router.get('/:id', orderController.getOrderById);
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id', orderController.updateOrder);
+router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateOrder);
 
 /**
  * @swagger
@@ -293,7 +296,7 @@ router.put('/:id', orderController.updateOrder);
  *       500:
  *         description: Lỗi server
  */
-router.delete('/:id', orderController.deleteOrder);
+router.delete('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.deleteOrder);
 
 // edit orderItem status
 // request return order item
@@ -366,7 +369,7 @@ router.delete('/:id', orderController.deleteOrder);
  *       '500':
  *         description: Lỗi máy chủ nội bộ.
  */
-router.put('/:id/orderItem/request-return', orderController.requestReturnOrderItem);
+router.put('/:id/orderItem/request-return', verifyToken, authorizeRoles(ROLES.CUSTOMER), orderController.requestReturnOrderItem);
 
 /**
  * @swagger
@@ -437,7 +440,7 @@ router.put('/:id/orderItem/request-return', orderController.requestReturnOrderIt
  *       '500':
  *         description: Lỗi máy chủ nội bộ.
  */
-router.put('/:id/orderItem/cancelled', orderController.requestCancelledOrderItem);
+router.put('/:id/orderItem/cancelled', verifyToken, authorizeRoles(ROLES.CUSTOMER), orderController.requestCancelledOrderItem);
 
 /**
  * @swagger
@@ -476,7 +479,7 @@ router.put('/:id/orderItem/cancelled', orderController.requestCancelledOrderItem
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id/orderItem/:orderItemId', orderController.editOrderItemStatus);
+router.put('/:id/orderItem/:orderItemId', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.editOrderItemStatus);
 
 /**
  * @swagger
@@ -511,6 +514,6 @@ router.put('/:id/orderItem/:orderItemId', orderController.editOrderItemStatus);
  *       500:
  *         description: Lỗi máy chủ.
  */
-router.put('/:id/reject-return', orderController.rejectReturnRequest);
+router.put('/:id/reject-return', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.rejectReturnRequest);
 
 module.exports = router;
