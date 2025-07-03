@@ -35,6 +35,9 @@ router.post('/reset-password', authController.resetPassword);
  */
 router.post('/login', authController.login);
 
+router.post("/resend-verification", authController.resendVerificationEmail);
+
+
 /**
  * @swagger
  * /auth/register:
