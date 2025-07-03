@@ -346,6 +346,77 @@ exports.VerifyEmail = async (req, res) => {
   }
 };
 
+exports.resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter your email'
+      });
+    }
+
+    // Tìm user theo email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Email does not exist in the system'
+      });
+    }
+
+    // Kiểm tra tài khoản đã được xác thực chưa
+    if (user.verified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account is already verified'
+      });
+    }
+
+    // Tạo verification token mới và thời gian hết hạn (24 giờ)
+    const verificationToken = jwt.sign(
+      { email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Tính thời gian hết hạn
+    const verificationTokenExpires = new Date();
+    verificationTokenExpires.setHours(verificationTokenExpires.getHours() + 24);
+
+    // Cập nhật token mới vào user
+    await User.findByIdAndUpdate(user._id, {
+      verificationToken,
+      verificationTokenExpires
+    });
+
+    // Gửi email xác thực
+    const emailSent = await sendVerificationEmail(email, verificationToken);
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cannot send verification email. Please try again later.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification email has been sent. Please check your email.',
+      data: {
+        verificationExpires: verificationTokenExpires
+      }
+    });
+
+  } catch (error) {
+    console.error('Resend verification email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
 exports.googleAuth = async (req, res) => {
   try {
     const { credential } = req.body;

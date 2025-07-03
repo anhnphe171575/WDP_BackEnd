@@ -30,6 +30,7 @@ router.get('/verify-email', authController.VerifyEmail);
 router.get('/myprofile', verifyToken, authController.UserProfile);
 router.post('/google', authController.googleAuth);
 router.post('/changepassword', verifyToken, authController.changePassword);
+router.post("/resend-verification", authController.resendVerificationEmail);
 
 
 module.exports = router;
