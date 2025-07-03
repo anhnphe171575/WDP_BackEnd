@@ -443,7 +443,6 @@ exports.googleAuth = async (req, res) => {
       user = new User({
         name,
         email,
-        password: Math.random().toString(36).slice(-8), // Random password
         role: 1, // Default role for normal user
         verified: true, // Google accounts are pre-verified
         avatar: picture,

@@ -21,4 +21,4 @@ router.get('/revenue-by-time', verifyToken, authorizeRoles(8), getRevenueByTime)
 // // Route lấy thống kê sản phẩm bán chậm
 router.get('/low-revenue-products', verifyToken, authorizeRoles(8), getLowRevenueProducts);
 
-module.exports = router; 
+// module.exports = router; 
