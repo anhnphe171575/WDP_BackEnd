@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bannerController = require('../controllers/bannerController');
 const { upload } = require('../config/cloudinary');
+const authorizeRoles = require('../middleware/authorization');
 
 /**
  * @swagger
@@ -115,7 +116,7 @@ const { upload } = require('../config/cloudinary');
 
 
 // Create a new banner
-router.post('/', upload.single('image'), bannerController.createBanner);
+router.post('/', upload.single('image'),authorizeRoles(4), bannerController.createBanner);
 
 // Get all banners
 router.get('/', bannerController.getAllBanners);
@@ -124,9 +125,9 @@ router.get('/', bannerController.getAllBanners);
 router.get('/:id', bannerController.getBannerById);
 
 // Update a banner
-router.put('/:id', upload.single('image'), bannerController.updateBanner);
+router.put('/:id', upload.single('image'),authorizeRoles(4), bannerController.updateBanner);
 
 // Delete a banner
-router.delete('/:id', bannerController.deleteBanner);
+router.delete('/:id', authorizeRoles(4), bannerController.deleteBanner);
 
 module.exports = router;

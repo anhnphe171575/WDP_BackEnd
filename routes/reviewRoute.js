@@ -3,6 +3,7 @@ const router = express.Router();
 const reviewController = require('../controllers/reviewController');
 const verifyToken = require('../middleware/auth');
 const { upload } = require('../config/cloudinary');
+const authorizeRoles = require('../middleware/authorization');
 // Create a new review
 router.post('/', verifyToken, upload.array('images', 5), reviewController.createReview);
 
@@ -10,7 +11,7 @@ router.post('/', verifyToken, upload.array('images', 5), reviewController.create
 router.get('/', reviewController.getAllReviews);
 
 // Get reviews by product ID
-router.get('/product/:productId', reviewController.getReviewsByProduct);
+router.get('/product/:productId', authorizeRoles(4), reviewController.getReviewsByProduct);
 
 // Get reviews by user ID
 router.get('/user/:userId', reviewController.getReviewsByUser);
@@ -19,10 +20,10 @@ router.get('/user/:userId', reviewController.getReviewsByUser);
 router.get('/:id', reviewController.getReviewById);
 
 // Update review
-router.put('/:id', verifyToken, upload.array('images', 5), reviewController.updateReview);
+router.put('/:id', verifyToken, upload.array('images', 5),authorizeRoles(4), reviewController.updateReview);
 
 // Delete review
-router.delete('/:id', verifyToken, reviewController.deleteReview);
+router.delete('/:id', verifyToken,authorizeRoles(4), reviewController.deleteReview);
 
 // Get average rating for a product
 router.get('/rating/:productId', reviewController.getAverageRating);
