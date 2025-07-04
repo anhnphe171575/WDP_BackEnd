@@ -440,7 +440,7 @@ router.put('/:id/orderItem/request-return', verifyToken, authorizeRoles(ROLES.CU
  *       '500':
  *         description: Lỗi máy chủ nội bộ.
  */
-router.put('/:id/orderItem/cancelled', verifyToken, orderController.requestCancelledOrderItem);
+router.put('/:id/orderItem/cancelled', orderController.requestCancelledOrderItem);
 
 /**
  * @swagger
