@@ -23,7 +23,8 @@ const userSchema = new mongoose.Schema({
   },
   verificationTokenExpires: { type: Date },
   googleId: { type: String, unique: true, sparse: true },
-  avatar: { type: String }
+  avatar: { type: String },
+  bannedUntil: { type: Date, default: null }
 }, { timestamps: true }, { collection: 'users' });
 
 

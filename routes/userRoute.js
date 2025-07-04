@@ -186,7 +186,7 @@ router.get('/', userController.getAllUsers);
  *       500:
  *         description: Lỗi server
  */
-router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), userController.getUserDashboard);
+router.get('/dashboard', userController.getUserDashboard);
 
 /**
  * @swagger
