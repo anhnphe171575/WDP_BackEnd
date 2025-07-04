@@ -2,6 +2,22 @@ const Order = require('../models/order');
 const OrderItem = require('../models/orderItem');
 const Product = require('../models/product');
 const ProductVariant = require('../models/productVariant');
+const ImportBatch = require('../models/import_batches');
+
+// Hàm tính tổng giá vốn theo phương pháp FIFO từ import_batches
+async function calculateCostFIFO(variantId, quantityNeeded) {
+  let totalCost = 0;
+  let quantityLeft = quantityNeeded;
+  // Lấy các lô nhập theo thứ tự cũ nhất trước
+  const batches = await ImportBatch.find({ variantId }).sort({ importDate: 1 });
+  for (const batch of batches) {
+    if (quantityLeft <= 0) break;
+    const usedQty = Math.min(batch.quantity, quantityLeft);
+    totalCost += usedQty * batch.costPrice;
+    quantityLeft -= usedQty;
+  }
+  return totalCost;
+}
 
 // Thống kê doanh thu và lãi theo sản phẩm
 const getProductRevenueStatistics = async (req, res) => {
@@ -38,8 +54,11 @@ const getProductRevenueStatistics = async (req, res) => {
           const productName = orderItem.productId.name;
           const quantity = orderItem.quantity;
           const revenue = orderItem.price * quantity;
-          const costPrice = orderItem.productVariant?.costPrice || 0;
-          const cost = costPrice * quantity;
+          // Lấy giá vốn thực tế từ import_batches theo FIFO
+          let cost = 0;
+          if (orderItem.productVariant) {
+            cost = await calculateCostFIFO(orderItem.productVariant._id, quantity);
+          }
           const profit = revenue - cost;
 
           if (productStats.has(productId)) {
@@ -210,8 +229,11 @@ const getLowRevenueProducts = async (req, res) => {
           const productName = orderItem.productId.name;
           const quantity = orderItem.quantity;
           const revenue = orderItem.price * quantity;
-          const costPrice = orderItem.productVariant?.costPrice || 0;
-          const cost = costPrice * quantity;
+          // Lấy giá vốn thực tế từ import_batches theo FIFO
+          let cost = 0;
+          if (orderItem.productVariant) {
+            cost = await calculateCostFIFO(orderItem.productVariant._id, quantity);
+          }
           const profit = revenue - cost;
 
           if (productStats.has(productId)) {
