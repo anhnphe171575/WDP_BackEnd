@@ -121,6 +121,23 @@ exports.updateOrder = async (req, res) => {
         order.paymentMethod = paymentMethod || order.paymentMethod;
         order.voucher = voucher || order.voucher;
         order.updateAt = Date.now();
+        if(status === 'processing') {
+            const notification = new Notification({
+                orderId: order.id,
+                userId: order.userId,
+                title: 'Trạng thái đơn hàng',
+                description: 'Đơn hàng của bạn đang được xử lý.',
+                type: 'order',
+            });
+            await notification.save();
+            // Emit notification qua socket.io
+            try {
+                const io = getIO();
+                io.to(order.userId.toString()).emit('notification', notification);
+            } catch (e) {
+                console.error('Socket emit error:', e);
+            }
+        }
         await order.save();
         res.status(200).json(order);
     } catch (error) {
@@ -133,11 +150,8 @@ exports.deleteOrder = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
 
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
-
-        await order.remove();
+        console.log(order);
+        
         res.status(200).json({ message: 'Order deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -767,7 +781,9 @@ exports.getTotalRevenue = async (req, res) => {
 
         // Tính phần trăm tăng trưởng so với tháng trước
         if (result.previousMonthRevenue > 0) {
-            result.monthlyGrowthPercentage = ((result.currentMonthRevenue - result.previousMonthRevenue) / result.previousMonthRevenue * 100).toFixed(2);
+            let growth = ((result.currentMonthRevenue - result.previousMonthRevenue) / result.previousMonthRevenue * 100).toFixed(2);
+            // Nếu growth là -100.00 thì trả về 0
+            result.monthlyGrowthPercentage = (growth === "-100.00" || growth === -100 || growth === -100.00) ? 0 : growth;
         } else {
             result.monthlyGrowthPercentage = 0;
         }

@@ -208,7 +208,7 @@ router.get('/', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderControlle
  *       500:
  *         description: Lỗi server
  */
-router.put('/bulk-update-status', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateBulkStatus);
+router.put('/bulk-update-status', orderController.updateBulkStatus);
 
 /**
  * @swagger
@@ -273,7 +273,7 @@ router.get('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateOrder);
+router.put('/:id',  orderController.updateOrder);
 
 /**
  * @swagger
@@ -296,7 +296,7 @@ router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       500:
  *         description: Lỗi server
  */
-router.delete('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.deleteOrder);
+router.delete('/:id',  orderController.deleteOrder);
 
 // edit orderItem status
 // request return order item
