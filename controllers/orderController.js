@@ -163,7 +163,7 @@ exports.getOrdersDashboard = async (req, res) => {
         const totalOrders = await Order.countDocuments();
 
         // Danh sách status cố định
-        const allStatuses = ["pending","processing", "shipped", "cancelled", "completed", "returned"];
+        const allStatuses = ["pending","processing", "shipping", "cancelled", "completed"];
 
         // 1. Group theo năm, tháng và status
         const ordersStatusByYearMonth = await Order.aggregate([
