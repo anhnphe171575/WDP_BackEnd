@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const User = require('../models/userModel');
 const { ROLES } = require('../config/role');
 const { sendNotification } = require('../services/sendNotification');
+const { getIO } = require('../config/socket.io');
 
 // ===== LẤY DANH SÁCH TICKET =====
 
@@ -182,15 +183,26 @@ exports.updateTicket = async (req, res) => {
       userId: ticket.userId,
       title: 'Yêu cầu hỗ trợ được cập nhật',
       description: `Ticket của bạn đã được cập nhật trạng thái hoặc phản hồi.`,
-      type: 'ticket'
+      type: 'ticket',
+      ticketId: ticket._id
     });
+
+    // Gửi socket tới khách hàng
+    const io = getIO();
+    io.to(ticket.userId.toString()).emit('ticketUpdated', {
+      ticketId: ticket._id,
+      status: ticket.status,
+      message: 'Yêu cầu hỗ trợ của bạn đã được cập nhật trạng thái hoặc phản hồi.'
+    });
+
     // Nếu có handlerId thì gửi cho handler
     if (ticket.handlerId) {
       await sendNotification({
         userId: ticket.handlerId,
         title: 'Ticket bạn phụ trách vừa được cập nhật',
         description: `Ticket: ${ticket.title || '[Không có tiêu đề]'} vừa được cập nhật.`,
-        type: 'ticket'
+        type: 'ticket',
+        ticketId: ticket._id
       });
     }
     res.status(200).json(ticket);
