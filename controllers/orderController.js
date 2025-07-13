@@ -511,7 +511,30 @@ exports.requestCancelledOrderItem = async(req,res)=>{
             order.status = 'cancelled'; // Or a more appropriate status like 'completed_with_returns_cancellations'
             await order.save();
         }
-
+        const countOrderCancelledByUser = await Order.countDocuments({ userId: order.userId, status: 'cancelled' });
+        console.log(countOrderCancelledByUser);
+        if (countOrderCancelledByUser > 3) {
+            await User.findByIdAndUpdate(order.userId, {
+                $set: { role: -1, bannedUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
+            });
+        }else if (countOrderCancelledByUser === 3) {
+            // send notification to user
+            const notification = new Notification({
+                orderId: order.id,
+                userId: order.userId,
+                title: 'Trạng thái đơn hàng',
+                description: `Bạn đã hủy 3 đơn hàng, vui lòng không hủy đơn hàng nữa.Nếu không sẽ bị cấm 1 tháng`,
+                type: 'order',
+            });
+            await notification.save();
+            // Emit notification qua socket.io
+            try {
+                const io = getIO();
+                io.to(order.userId.toString()).emit('notification', notification);
+            } catch (e) {
+                console.error('Socket emit error:', e);
+            }
+        } 
         res.status(200).json({ 
             message: 'Hủy sản phẩm thành công.', 
             updatedOrderItems,
