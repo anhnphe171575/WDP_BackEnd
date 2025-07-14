@@ -11,7 +11,8 @@ const  authorizeRoles  = require('../middleware/authorization');
  *   name: Users
  *   description: Quản lý người dùng
  */
-
+// Export users csv
+router.get('/export-csv', userController.exportUsersToCSV);
 /**
  * @swagger
  * /api/users:
@@ -355,5 +356,10 @@ router.post('/', userController.createUser);
  *       404:
  *         description: Không tìm thấy người dùng
  */
+
+// Import users from CSV
+router.post('/import-csv', userController.importUsersFromCSV);
+
+
 
 module.exports = router;
