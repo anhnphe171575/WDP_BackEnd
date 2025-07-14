@@ -254,6 +254,8 @@ router.get('/addresses', verifyToken, userController.getUserAddresses)
  */
 router.post('/addresses', verifyToken, userController.addAddress);
 
+router.put('/addresses/:addressId', verifyToken, userController.editAddress);
+
 router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress);
 
 router.put('/edit-profile', verifyToken, userController.updateProfile);

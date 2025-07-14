@@ -9,9 +9,10 @@ const { getIO } = require('../config/socket.io');
  * @param {String} param0.description - Nội dung thông báo
  * @param {String} param0.type - Loại thông báo (ví dụ: 'order', 'system', ...)
  * @param {String} [param0.orderId] - ID đơn hàng liên quan (nếu có)
+ * @param {String} [param0.ticketId] - ID ticket liên quan (nếu có)
  * @returns {Promise<Object>} notification đã lưu
  */
-async function sendNotification({ userId, title, description, type, orderId }) {
+async function sendNotification({ userId, title, description, type, orderId, ticketId }) {
   if (!userId || !title || !type) {
     throw new Error('Thiếu thông tin bắt buộc khi gửi notification');
   }
@@ -21,7 +22,8 @@ async function sendNotification({ userId, title, description, type, orderId }) {
     title,
     description,
     type,
-    orderId
+    orderId,
+    ticketId
   });
   await notification.save();
 

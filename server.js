@@ -88,7 +88,6 @@ app.use('/api/notification', notifiRoute);
 app.use('/api/chatbot', chatbotRoute);
 app.use('/api/statistics', statisticsRoute);
 app.use('/api/tickets', ticketRoute);
-// app.use('/api/statistics', statisticsRoute);
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);

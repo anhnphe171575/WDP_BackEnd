@@ -603,6 +603,49 @@ exports.deleteAddress = async (req, res) => {
     }
 };
 
+// Edit address by addressId
+exports.editAddress = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const addressId = req.params.addressId;
+        const updatedAddress = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const address = user.address.id(addressId);
+        if (!address) {
+            return res.status(404).json({
+                success: false,
+                message: 'Address not found'
+            });
+        }
+
+        // Cập nhật các trường
+        Object.keys(updatedAddress).forEach(key => {
+            address[key] = updatedAddress[key];
+        });
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Address updated successfully',
+            data: user.address
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 // Update address by index
 exports.updateAddress = async (req, res) => {
     try {

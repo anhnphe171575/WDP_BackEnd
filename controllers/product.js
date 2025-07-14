@@ -11,31 +11,24 @@ const OrderItem = require('../models/orderItem');
 const getTopSellingProducts = async (req, res) => {
     try {
         const topProducts = await Order.aggregate([
-            // Unwind OrderItems array to get individual items
             { $unwind: '$OrderItems' },
-            // Lookup to get product details from OrderItem
             {
                 $lookup: {
                     from: 'orderitems',
-                    localField: 'OrderItems.orderItem_id',
+                    localField: 'OrderItems',
                     foreignField: '_id',
                     as: 'orderItemDetails'
                 }
             },
-            // Unwind the orderItemDetails array
             { $unwind: '$orderItemDetails' },
-            // Group by product and count occurrences
             {
                 $group: {
-                    _id: '$orderItemDetails.product',
+                    _id: '$orderItemDetails.productId',
                     totalSold: { $sum: '$orderItemDetails.quantity' }
                 }
             },
-            // Sort by totalSold in descending order
             { $sort: { totalSold: -1 } },
-            // Limit to top 5
             { $limit: 5 },
-            // Lookup to get product details
             {
                 $lookup: {
                     from: 'products',
@@ -44,9 +37,7 @@ const getTopSellingProducts = async (req, res) => {
                     as: 'productDetails'
                 }
             },
-            // Unwind productDetails array
             { $unwind: '$productDetails' },
-            // Lookup to get product variants
             {
                 $lookup: {
                     from: 'productvariants',
@@ -55,7 +46,6 @@ const getTopSellingProducts = async (req, res) => {
                     as: 'variants'
                 }
             },
-            // Project only needed fields
             {
                 $project: {
                     _id: 1,
@@ -157,13 +147,25 @@ const getProductsBySearch = async (req, res) => {
             })
             .lean();
 
-        // Gắn variants vào từng product
+        // Lấy reviews cho tất cả sản phẩm
+        const Review = require('../models/reviewModel');
+        const reviews = await Review.find({ productId: { $in: productIds } })
+            .populate('userId', 'name avatar')
+            .lean();
+
+        // Gắn variants và reviews vào từng product
         const productMap = {};
-        products.forEach(p => { productMap[p._id.toString()] = { ...p, variants: [] }; });
+        products.forEach(p => { productMap[p._id.toString()] = { ...p, variants: [], reviews: [] }; });
         variants.forEach(variant => {
             const pid = variant.product_id.toString();
             if (productMap[pid]) {
                 productMap[pid].variants.push(variant);
+            }
+        });
+        reviews.forEach(review => {
+            const pid = review.productId.toString();
+            if (productMap[pid]) {
+                productMap[pid].reviews.push(review);
             }
         });
 
@@ -350,7 +352,10 @@ const getAllBestSellingProducts = async (req, res) => {
                                 description: '$$cat.description'
                             }
                         }
-                    }
+                    },
+                    averageRating: 1,
+                    totalReviews: 1,
+                    reviews: 1
                 }
             }
         ]);
@@ -404,6 +409,65 @@ const getAllBestSellingProducts = async (req, res) => {
                         as: 'categories'
                     }
                 },
+                // Add reviews
+                {
+                    $lookup: {
+                        from: 'reviews',
+                        localField: '_id',
+                        foreignField: 'productId',
+                        as: 'reviews'
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'reviews.userId',
+                        foreignField: '_id',
+                        as: 'reviewUsers'
+                    }
+                },
+                {
+                    $addFields: {
+                        averageRating: { $avg: '$reviews.rating' },
+                        totalReviews: { $size: '$reviews' },
+                        reviews: {
+                            $map: {
+                                input: '$reviews',
+                                as: 'review',
+                                in: {
+                                    _id: '$$review._id',
+                                    rating: '$$review.rating',
+                                    comment: '$$review.comment',
+                                    images: '$$review.images',
+                                    createdAt: '$$review.createdAt',
+                                    user: {
+                                        $let: {
+                                            vars: {
+                                                user: {
+                                                    $arrayElemAt: [
+                                                        {
+                                                            $filter: {
+                                                                input: '$reviewUsers',
+                                                                as: 'u',
+                                                                cond: { $eq: ['$$u._id', '$$review.userId'] }
+                                                            }
+                                                        },
+                                                        0
+                                                    ]
+                                                }
+                                            },
+                                            in: {
+                                                _id: '$$user._id',
+                                                name: '$$user.name',
+                                                avatar: '$$user.avatar'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
                 {
                     $project: {
                         _id: 1,
@@ -429,7 +493,10 @@ const getAllBestSellingProducts = async (req, res) => {
                                     description: '$$cat.description'
                                 }
                             }
-                        }
+                        },
+                        averageRating: 1,
+                        totalReviews: 1,
+                        reviews: 1
                     }
                 }
             ]);
@@ -505,6 +572,65 @@ const getProductDetailsByCategory = async (req, res) => {
                     variants: { $push: '$variants' }
                 }
             },
+            // Add reviews
+            {
+                $lookup: {
+                    from: 'reviews',
+                    localField: '_id',
+                    foreignField: 'productId',
+                    as: 'reviews'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'reviews.userId',
+                    foreignField: '_id',
+                    as: 'reviewUsers'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: { $avg: '$reviews.rating' },
+                    totalReviews: { $size: '$reviews' },
+                    reviews: {
+                        $map: {
+                            input: '$reviews',
+                            as: 'review',
+                            in: {
+                                _id: '$$review._id',
+                                rating: '$$review.rating',
+                                comment: '$$review.comment',
+                                images: '$$review.images',
+                                createdAt: '$$review.createdAt',
+                                user: {
+                                    $let: {
+                                        vars: {
+                                            user: {
+                                                $arrayElemAt: [
+                                                    {
+                                                        $filter: {
+                                                            input: '$reviewUsers',
+                                                            as: 'u',
+                                                            cond: { $eq: ['$$u._id', '$$review.userId'] }
+                                                        }
+                                                    },
+                                                    0
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            _id: '$$user._id',
+                                            name: '$$user.name',
+                                            avatar: '$$user.avatar'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             {
                 $project: {
                     _id: 1,
@@ -514,13 +640,10 @@ const getProductDetailsByCategory = async (req, res) => {
                     category: 1,
                     createAt: 1,
                     updateAt: 1,
-                    variants: {
-                        _id: 1,
-                        images: 1,
-                        sellPrice: 1,
-                        attribute: 1,        // Lấy nguyên mảng attribute ObjectId từ variant
-                        totalQuantity: 1
-                    }
+                    variants: 1,
+                    averageRating: 1,
+                    totalReviews: 1,
+                    reviews: 1
                 }
             }
         ]);
