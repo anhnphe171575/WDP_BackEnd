@@ -822,14 +822,14 @@ exports.getRecommendImports = async (req, res) => {
                 
 
                 // Tính doanh số trung bình/tháng của variant này
-                const sixMonthsAgo = new Date();
-                sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                const MonthsAgo = new Date();
+                MonthsAgo.setMonth(MonthsAgo.getMonth() - 1);
 
                 const salesData = await Order.aggregate([
                     {
                         $match: {
                             status: 'completed',
-                            createAt: { $gte: sixMonthsAgo }
+                            createAt: { $gte: MonthsAgo }
                         }
                     },
                     {

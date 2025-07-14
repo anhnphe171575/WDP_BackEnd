@@ -1064,3 +1064,64 @@ exports.getUserDashboard = async (req, res) => {
     }
 };
 
+// Test function để kiểm tra users bị ban
+exports.getBannedUsers = async (req, res) => {
+    try {
+        const bannedUsers = await User.find({ 
+            role: -1,
+            bannedUntil: { $exists: true }
+        }).select('name email role bannedUntil');
+
+        res.status(200).json({
+            message: 'Banned users retrieved successfully',
+            count: bannedUsers.length,
+            users: bannedUsers
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Test function để manually unban users (cho admin)
+exports.manualUnbanUsers = async (req, res) => {
+    try {
+        const currentDate = new Date();
+        
+        const usersToUnban = await User.find({
+            role: -1,
+            bannedUntil: { $lte: currentDate }
+        });
+
+        if (usersToUnban.length === 0) {
+            return res.status(200).json({ 
+                message: 'No users to unban',
+                count: 0
+            });
+        }
+
+        const result = await User.updateMany(
+            {
+                role: -1,
+                bannedUntil: { $lte: currentDate }
+            },
+            {
+                $set: { role: 0 },
+                $unset: { bannedUntil: 1 }
+            }
+        );
+
+        res.status(200).json({
+            message: 'Users unbanned successfully',
+            unbannedCount: result.modifiedCount,
+            users: usersToUnban.map(user => ({
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                bannedUntil: user.bannedUntil
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
