@@ -260,6 +260,10 @@ router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress
 
 router.put('/edit-profile', verifyToken, userController.updateProfile);
 
+// Test routes cho Cron Job
+router.get('/banned', userController.getBannedUsers);
+router.post('/unban', userController.manualUnbanUsers);
+
 router.put('/:id', userController.updateUser);
 router.get('/:id', verifyToken, userController.getUserById);
 router.delete('/:id', userController.deleteUser);

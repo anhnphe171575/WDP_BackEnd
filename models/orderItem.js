@@ -29,13 +29,6 @@ const orderItemSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  returnRequestedQuantity: {
-    type: Number,
-    default: 0
-  },
-  
-  returnRequestedAt: {type: Date},
-  returnedAt: { type: Date },
   cancelRequestedQuantity: {
     type: Number,
     default: 0

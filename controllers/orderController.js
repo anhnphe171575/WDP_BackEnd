@@ -6,6 +6,7 @@ const ProductVariant = require('../models/productVariant')
 const Attribute = require('../models/attribute')
 const ImportBatch = require('../models/import_batches');
 const Notification = require('../models/notificationModel');
+const User = require('../models/userModel');
 const { getIO } = require('../config/socket.io');
 
 // Create new order
@@ -121,6 +122,23 @@ exports.updateOrder = async (req, res) => {
         order.paymentMethod = paymentMethod || order.paymentMethod;
         order.voucher = voucher || order.voucher;
         order.updateAt = Date.now();
+        if(status === 'processing') {
+            const notification = new Notification({
+                orderId: order.id,
+                userId: order.userId,
+                title: 'Trạng thái đơn hàng',
+                description: 'Đơn hàng của bạn đang được xử lý.',
+                type: 'order',
+            });
+            await notification.save();
+            // Emit notification qua socket.io
+            try {
+                const io = getIO();
+                io.to(order.userId.toString()).emit('notification', notification);
+            } catch (e) {
+                console.error('Socket emit error:', e);
+            }
+        }
         await order.save();
         res.status(200).json(order);
     } catch (error) {
@@ -133,11 +151,8 @@ exports.deleteOrder = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
 
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
-
-        await order.remove();
+        console.log(order);
+        
         res.status(200).json({ message: 'Order deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -149,7 +164,7 @@ exports.getOrdersDashboard = async (req, res) => {
         const totalOrders = await Order.countDocuments();
 
         // Danh sách status cố định
-        const allStatuses = ["pending","processing", "shipped", "cancelled", "completed", "returned"];
+        const allStatuses = ["pending","processing", "shipping", "cancelled", "completed"];
 
         // 1. Group theo năm, tháng và status
         const ordersStatusByYearMonth = await Order.aggregate([
@@ -767,13 +782,147 @@ exports.getTotalRevenue = async (req, res) => {
 
         // Tính phần trăm tăng trưởng so với tháng trước
         if (result.previousMonthRevenue > 0) {
-            result.monthlyGrowthPercentage = ((result.currentMonthRevenue - result.previousMonthRevenue) / result.previousMonthRevenue * 100).toFixed(2);
+            let growth = ((result.currentMonthRevenue - result.previousMonthRevenue) / result.previousMonthRevenue * 100).toFixed(2);
+            // Nếu growth là -100.00 thì trả về 0
+            result.monthlyGrowthPercentage = (growth === "-100.00" || growth === -100 || growth === -100.00) ? 0 : growth;
         } else {
             result.monthlyGrowthPercentage = 0;
         }
 
         res.status(200).json(result);
     } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get import recommendations based on inventory and sales
+exports.getRecommendImports = async (req, res) => {
+    try {
+        // Lấy tất cả sản phẩm với thông tin chi tiết
+        const products = await Product.find()
+            .populate({
+                path: 'category',
+                select: 'name'
+            });
+
+        const recommendations = [];
+
+        for (const product of products) {
+            // Lấy tất cả variants của sản phẩm
+            const variants = await ProductVariant.find({ product_id: product._id })
+                .populate({
+                    path: 'attribute',
+                    select: 'value description'
+                });
+
+            for (const variant of variants) {
+                // Tính tồn kho hiện tại của variant
+                const importBatches = await ImportBatch.find({ variantId: variant._id });
+                const currentStock = importBatches.reduce((total, batch) => total + batch.quantity, 0);
+                
+
+                // Tính doanh số trung bình/tháng của variant này
+                const MonthsAgo = new Date();
+                MonthsAgo.setMonth(MonthsAgo.getMonth() - 1);
+
+                const salesData = await Order.aggregate([
+                    {
+                        $match: {
+                            status: 'completed',
+                            createAt: { $gte: MonthsAgo }
+                        }
+                    },
+                    {
+                        $unwind: '$OrderItems'
+                    },
+                    {
+                        $lookup: {
+                            from: 'orderitems',
+                            localField: 'OrderItems',
+                            foreignField: '_id',
+                            as: 'orderItemDetails'
+                        }
+                    },
+                    {
+                        $unwind: '$orderItemDetails'
+                    },
+                    {
+                        $match: {
+                            'orderItemDetails.productVariant': variant._id
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: {
+                                year: { $year: '$createAt' },
+                                month: { $month: '$createAt' }
+                            },
+                            monthlySales: { $sum: '$orderItemDetails.quantity' }
+                        }
+                    },
+                    {
+                        $sort: { '_id.year': 1, '_id.month': 1 }
+                    }
+                ]);
+
+                // Tính doanh số trung bình/tháng
+                let averageMonthlySales = 0;
+                if (salesData.length > 0) {
+                    const totalSales = salesData.reduce((sum, data) => sum + data.monthlySales, 0);
+                    averageMonthlySales = Math.round(totalSales / salesData.length);
+                }
+
+                // Kiểm tra điều kiện đề xuất nhập
+                const shouldImport = currentStock < (averageMonthlySales * 0.5);
+                
+                const suggestedQuantity = shouldImport ? Math.max(0, averageMonthlySales - currentStock) : 0;
+
+                // Tạo tên sản phẩm với thông tin variant
+                let productName = product.name;
+                let attributeNames = '';
+                if (variant.attribute && variant.attribute.length > 0) {
+                    attributeNames = variant.attribute.map(attr => attr.value).join(' - ');
+                    productName += ` (${attributeNames})`;
+                }
+
+                recommendations.push({
+                    productId: product._id,
+                    variantId: variant._id,
+                    img: variant.images && variant.images.length > 0 ? variant.images[0].url : null,
+                    productName: productName,
+                    currentStock: currentStock,
+                    averageMonthlySales: averageMonthlySales,
+                    shouldImport: shouldImport,
+                    attributeNames: attributeNames,
+                    suggestedQuantity: suggestedQuantity,
+                    category: product.category.map(cat => cat.name).join(', '),
+                    brand: product.brand
+                });
+            }
+        }
+
+        // Lọc chỉ lấy những sản phẩm cần nhập (shouldImport = true)
+        const filteredRecommendations = recommendations.filter(r => r.shouldImport);
+
+        // Sắp xếp theo suggestedQuantity giảm dần
+        filteredRecommendations.sort((a, b) => b.suggestedQuantity - a.suggestedQuantity);
+
+        // Thống kê tổng quan
+        const totalProducts = recommendations.length;
+        const productsNeedImport = filteredRecommendations.length;
+        const totalSuggestedQuantity = filteredRecommendations.reduce((sum, r) => sum + r.suggestedQuantity, 0);
+
+        res.status(200).json({
+            summary: {
+                totalProducts,
+                productsNeedImport,
+                totalSuggestedQuantity
+            },
+            recommendations: filteredRecommendations
+        });
+
+    } catch (error) {
+        console.error('Error in getRecommendImports:', error);
         res.status(500).json({ message: error.message });
     }
 };

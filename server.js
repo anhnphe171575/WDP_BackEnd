@@ -11,6 +11,7 @@ const cookieParser = require("cookie-parser");
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const { setupSocket, getIO } = require('./config/socket.io');
+const { initializeCronJobs } = require('./services/cronService');
 
 const blogRoute = require('./routes/blogRoute');
 const productRoute = require('./routes/productRoute');
@@ -91,4 +92,7 @@ const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Swagger documentation available at http://localhost:${PORT}/api-docs`);
+  
+  // Khởi tạo cron jobs sau khi server đã start
+  initializeCronJobs();
 });
