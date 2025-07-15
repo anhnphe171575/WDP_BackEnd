@@ -39,29 +39,29 @@ const addToCart = async (req, res) => {
         let cart = await Cart.findOne({ userId });
         if (!cart) {
             cart = new Cart({ userId, cartItems: [] });
+            await cart.save();
         }
 
-        // Check if product variant already exists in cart
-        const existingCartItem = await CartItem.findOne({
-            productId: productId,
-            productVariantId: productVariantId,
-      
-        });
-        console.log(existingCartItem);
+        // Populate cartItems để kiểm tra cart item thuộc cart của user
+        await cart.populate('cartItems');
+
+        // Tìm cartItem trong cart của user hiện tại
+        const existingCartItem = cart.cartItems.find(
+            item =>
+                item.productId.toString() === productId &&
+                item.productVariantId.toString() === productVariantId
+        );
+
         if (existingCartItem) {
-            // Update quantity if product variant already in cart
             existingCartItem.quantity += quantity;
             await existingCartItem.save();
         } else {
-            // Create new cart item
             const newCartItem = new CartItem({
                 productId,
                 productVariantId,
                 quantity
             });
             await newCartItem.save();
-            
-            // Add cart item to cart
             cart.cartItems.push(newCartItem._id);
         }
 
