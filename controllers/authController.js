@@ -372,7 +372,7 @@ exports.resendVerificationEmail = async (req, res) => {
         success: false,
         message: 'Account is already verified'
       });
-    }
+    };
 
     // Tạo verification token mới và thời gian hết hạn (24 giờ)
     const verificationToken = jwt.sign(
