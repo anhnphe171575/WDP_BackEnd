@@ -24,7 +24,8 @@ const notificationSchema = new mongoose.Schema({
   isRead: {
     type: Boolean,
     default: false
-  }
+  },
+  ticketId: { type: mongoose.Schema.Types.ObjectId, ref: 'Ticket' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Notification', notificationSchema);

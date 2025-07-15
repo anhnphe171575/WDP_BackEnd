@@ -20,7 +20,7 @@ const ticketSchema = new mongoose.Schema({
   priority: { type: String, enum: ['normal', 'high', 'urgent'], default: 'normal' },
   response: { type: String }, 
   internalNote: { type: String },
-  handlerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
+  handlerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Ticket', ticketSchema);

@@ -29,9 +29,93 @@ router.post('/reset-password', authController.resetPassword);
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
- *     summary: Đăng nhập
+ *     tags:
+ *       - Authentication
+ *     summary: Đăng nhập tài khoản
+ *     description: Đăng nhập bằng email và mật khẩu để nhận JWT token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email đăng nhập
+ *                 example: "user@example.com"
+ *               password:
+ *                 type: string
+ *                 description: Mật khẩu tài khoản
+ *                 example: "password123"
+ *     responses:
+ *       200:
+ *         description: Đăng nhập thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Đăng nhập thành công"
+ *                 token:
+ *                   type: string
+ *                   description: JWT token để xác thực
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       description: ID của user
+ *                       example: "507f1f77bcf86cd799439011"
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                       example: "user@example.com"
+ *                     role:
+ *                       type: number
+ *                       description: Vai trò của user 
+ *                       example: 1
+ *       400:
+ *         description: Lỗi validation hoặc thông tin đăng nhập không đúng
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Email hoặc mật khẩu không đúng"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Lỗi server"
+ *                 error:
+ *                   type: string
+ *                   description: Chi tiết lỗi
  */
 router.post('/login', authController.login);
 

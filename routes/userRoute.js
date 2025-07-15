@@ -11,7 +11,8 @@ const  authorizeRoles  = require('../middleware/authorization');
  *   name: Users
  *   description: Quản lý người dùng
  */
-
+// Export users csv
+router.get('/export-csv', userController.exportUsersToCSV);
 /**
  * @swagger
  * /api/users:
@@ -254,9 +255,15 @@ router.get('/addresses', verifyToken, userController.getUserAddresses)
  */
 router.post('/addresses', verifyToken, userController.addAddress);
 
+router.put('/addresses/:addressId', verifyToken, userController.editAddress);
+
 router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress);
 
 router.put('/edit-profile', verifyToken, userController.updateProfile);
+
+// Test routes cho Cron Job
+router.get('/banned', userController.getBannedUsers);
+router.post('/unban', userController.manualUnbanUsers);
 
 router.put('/:id', userController.updateUser);
 router.get('/:id', verifyToken, userController.getUserById);
@@ -349,5 +356,10 @@ router.post('/', userController.createUser);
  *       404:
  *         description: Không tìm thấy người dùng
  */
+
+// Import users from CSV
+router.post('/import-csv', userController.importUsersFromCSV);
+
+
 
 module.exports = router;

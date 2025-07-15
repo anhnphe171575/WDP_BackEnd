@@ -11,7 +11,13 @@ const transporter = require('../config/email');
 const Voucher = require('../models/voucher');
 const Product = require('../models/product')
 const ProductVariant = require('../models/productVariant')
+const csv = require('csv-parser');
+const multer = require('multer');
+const fs = require('fs');
 
+
+// Multer config cho upload file CSV
+const upload = multer({ dest: 'uploads/' });
 
 // Get all orders of user
 exports.getAllOrders = async (req, res) => {
@@ -603,6 +609,49 @@ exports.deleteAddress = async (req, res) => {
     }
 };
 
+// Edit address by addressId
+exports.editAddress = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const addressId = req.params.addressId;
+        const updatedAddress = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const address = user.address.id(addressId);
+        if (!address) {
+            return res.status(404).json({
+                success: false,
+                message: 'Address not found'
+            });
+        }
+
+        // Cập nhật các trường
+        Object.keys(updatedAddress).forEach(key => {
+            address[key] = updatedAddress[key];
+        });
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Address updated successfully',
+            data: user.address
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 // Update address by index
 exports.updateAddress = async (req, res) => {
     try {
@@ -1063,4 +1112,152 @@ exports.getUserDashboard = async (req, res) => {
         });
     }
 };
+
+// Test function để kiểm tra users bị ban
+exports.getBannedUsers = async (req, res) => {
+    try {
+        const bannedUsers = await User.find({ 
+            role: -1,
+            bannedUntil: { $exists: true }
+        }).select('name email role bannedUntil');
+
+        res.status(200).json({
+            message: 'Banned users retrieved successfully',
+            count: bannedUsers.length,
+            users: bannedUsers
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Test function để manually unban users (cho admin)
+exports.manualUnbanUsers = async (req, res) => {
+    try {
+        const currentDate = new Date();
+        
+        const usersToUnban = await User.find({
+            role: -1,
+            bannedUntil: { $lte: currentDate }
+        });
+
+        if (usersToUnban.length === 0) {
+            return res.status(200).json({ 
+                message: 'No users to unban',
+                count: 0
+            });
+        }
+
+        const result = await User.updateMany(
+            {
+                role: -1,
+                bannedUntil: { $lte: currentDate }
+            },
+            {
+                $set: { role: 0 },
+                $unset: { bannedUntil: 1 }
+            }
+        );
+
+        res.status(200).json({
+            message: 'Users unbanned successfully',
+            unbannedCount: result.modifiedCount,
+            users: usersToUnban.map(user => ({
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                bannedUntil: user.bannedUntil
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// API: Import users từ file CSV
+exports.importUsersFromCSV = [
+    upload.single('file'),
+    async (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+        const results = [];
+        const errors = [];
+        try {
+            fs.createReadStream(req.file.path)
+                .pipe(csv())
+                .on('data', (data) => {
+                    results.push(data);
+                })
+                .on('end', async () => {
+                    // Xử lý từng dòng để tạo user
+                    for (const row of results) {
+                        try {
+                            // Giả sử CSV có các cột: name, email, password
+                            if (!row.email || !row.password) {
+                                errors.push({ row, error: 'Missing email or password' });
+                                continue;
+                            }
+                            // Kiểm tra email đã tồn tại chưa
+                            const existed = await User.findOne({ email: row.email });
+                            if (existed) {
+                                errors.push({ row, error: 'Email already exists' });
+                                continue;
+                            }
+                            // Tạo user mới
+                            const user = new User({
+                                name: row.name || '',
+                                email: row.email,
+                                password: row.password // Có thể hash nếu cần
+                            });
+                            await user.save();
+                        } catch (err) {
+                            errors.push({ row, error: err.message });
+                        }
+                    }
+                    // Xóa file tạm
+                    fs.unlinkSync(req.file.path);
+                    res.status(200).json({
+                        message: 'Import completed',
+                        imported: results.length - errors.length,
+                        errors
+                    });
+                });
+        } catch (error) {
+            if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+            res.status(500).json({ message: error.message });
+        }
+    }
+];
+
+// API: Export users ra file CSV
+exports.exportUsersToCSV = async (req, res) => {
+    try {
+      const users = await User.find().select('name email role ');
+      const header = 'name,email,role';
+      const escapeCSV = (value) => {
+        if (typeof value !== 'string') value = String(value ?? '');
+        if (value.includes(',') || value.includes('\"') || value.includes('\n')) {
+          value = value.replace(/\"/g, '\"\"');
+          return `\"${value}\"`;
+        }
+        return value;
+      };
+      const rows = users.map(u =>
+        [
+          escapeCSV(u.name),
+          escapeCSV(u.email),
+          escapeCSV(u.role !== undefined ? u.role : ''),
+          escapeCSV(u.createdAt ? u.createdAt.toISOString() : '')
+        ].join(',')
+      );
+      const csvContent = [header, ...rows].join('\n');      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=users.csv');
+      res.status(200).send(csvContent);
+    } catch (error) {
+      console.error(error); // log toàn bộ lỗi
+      res.status(500).json({ message: error.message });
+    }
+  };
 

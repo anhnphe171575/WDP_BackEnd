@@ -208,7 +208,99 @@ router.get('/', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderControlle
  *       500:
  *         description: Lỗi server
  */
-router.put('/bulk-update-status', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateBulkStatus);
+router.put('/bulk-update-status', orderController.updateBulkStatus);
+
+/**
+ * @swagger
+ * /api/orders/recommend-imports:
+ *   get:
+ *     summary: Lấy danh sách đề xuất nhập hàng dựa trên tồn kho và doanh số
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Danh sách đề xuất nhập hàng
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalProducts:
+ *                       type: number
+ *                       description: Tổng số sản phẩm
+ *                     productsNeedImport:
+ *                       type: number
+ *                       description: Số sản phẩm cần nhập
+ *                     totalSuggestedQuantity:
+ *                       type: number
+ *                       description: Tổng số lượng đề xuất nhập
+ *                 recommendations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       productId:
+ *                         type: string
+ *                         description: ID sản phẩm
+ *                       variantId:
+ *                         type: string
+ *                         description: ID variant sản phẩm
+ *                       img:
+ *                         type: string
+ *                         description: URL hình ảnh đầu tiên của variant
+ *                         example: "https://example.com/image1.jpg"
+ *                       productName:
+ *                         type: string
+ *                         description: Tên sản phẩm (bao gồm thông tin variant)
+ *                       currentStock:
+ *                         type: number
+ *                         description: Tồn kho hiện tại
+ *                       averageMonthlySales:
+ *                         type: number
+ *                         description: Doanh số trung bình/tháng
+ *                       shouldImport:
+ *                         type: boolean
+ *                         description: Có nên nhập hay không
+ *                       attributeNames:
+ *                         type: string
+ *                         description: Tên các thuộc tính của variant 
+ *                       suggestedQuantity:
+ *                         type: number
+ *                         description: Số lượng đề xuất nhập
+ *                       category:
+ *                         type: string
+ *                         description: Danh mục sản phẩm
+ *                       brand:
+ *                         type: string
+ *                         description: Thương hiệu
+ *       401:
+ *         description: Không có token hoặc token không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Token không tồn tại"
+ *       403:
+ *         description: Không có quyền truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Không có quyền truy cập"
+ *       500:
+ *         description: Lỗi server
+ */
+router.get('/recommend-imports', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getRecommendImports);
 
 /**
  * @swagger
@@ -273,7 +365,7 @@ router.get('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateOrder);
+router.put('/:id',  orderController.updateOrder);
 
 /**
  * @swagger
@@ -296,7 +388,7 @@ router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       500:
  *         description: Lỗi server
  */
-router.delete('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.deleteOrder);
+router.delete('/:id',  orderController.deleteOrder);
 
 // edit orderItem status
 // request return order item
@@ -515,5 +607,7 @@ router.put('/:id/orderItem/:orderItemId', verifyToken, authorizeRoles(ROLES.ORDE
  *         description: Lỗi máy chủ.
  */
 router.put('/:id/reject-return', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.rejectReturnRequest);
+
+// top 3 products in order with status completed
 
 module.exports = router;

@@ -25,6 +25,7 @@ router.get('/parent', getParentCategories);
  *   get:
  *     summary: Lấy danh sách categories con theo parentId
  */
+router.get('/admin/parent',verifyToken,authorizeRoles(0), getParentCategories);
 router.get('/child-categories/:parentId', getChildCategoriesByParentId);
 
 /**
