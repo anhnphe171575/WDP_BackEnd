@@ -1,6 +1,8 @@
 const Product = require('../models/product');
 const Category = require('../models/category');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const stringSimilarity = require('string-similarity');
+const faqList = require('./faq');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -26,8 +28,19 @@ const MODEL_CONFIG = {
 exports.chatWithBot = async (req, res) => {
   try {
     const { messages } = req.body;
+    const userMessage = messages && messages.length > 0 ? messages[messages.length - 1].content : '';
     if (!GEMINI_API_KEY) {
       return res.status(500).json({ reply: 'Chưa cấu hình GEMINI_API_KEY.' });
+    }
+
+    // 1. Kiểm tra FAQ dựa trên từ khóa
+    if (userMessage) {
+      const lowerUserMsg = userMessage.toLowerCase();
+      for (const faq of faqList) {
+        if (faq.keywords && faq.keywords.every(kw => lowerUserMsg.includes(kw))) {
+          return res.json({ reply: faq.answer });
+        }
+      }
     }
 
     // Lấy dữ liệu từ MongoDB
