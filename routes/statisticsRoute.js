@@ -8,10 +8,7 @@ const authorizeRoles = require('../middleware/authorization');
 // const { checkRole } = require('../middleware/authorization');
 
 
-// Middleware kiểm tra quyền ADMIN_BUSINESS
-// const requireAdminBusiness = checkRole(ROLES.ADMIN_BUSINESS);
 
-// Route lấy thống kê doanh thu và lãi theo sản phẩm
 
 router.get('/product-revenue', verifyToken , authorizeRoles(8), getProductRevenueStatistics);
 

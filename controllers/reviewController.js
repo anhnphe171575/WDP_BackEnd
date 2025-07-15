@@ -47,7 +47,7 @@ exports.createReview = async (req, res) => {
                 success: false,
                 error: 'You can only review products you have purchased'
             });
-        }
+        };
 
         // Kiểm tra xem người dùng đã review sản phẩm này chưa
         const existingReview = await Review.findOne({ userId, productId });
