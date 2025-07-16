@@ -18,4 +18,7 @@ router.get('/conversation/:userId', auth, messageController.getConversationsByUs
 // Kết thúc trò chuyện với khách hàng
 router.post('/end-conversation', auth, messageController.endConversation);
 
+// Đếm số tin nhắn chưa đọc của user
+router.get('/unread-count/:userId', auth, messageController.countUnreadMessages);
+
 module.exports = router;
