@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const voucherController = require('../controllers/voucherController');
 const verifyToken = require('../middleware/auth');
+const authorizeRoles = require('../middleware/authorization');
 
 /**
  * @swagger
@@ -57,7 +58,7 @@ const verifyToken = require('../middleware/auth');
  *       500:
  *         description: Lỗi server
  */
-router.get('/', voucherController.getAllVouchers);
+router.get('/', verifyToken, authorizeRoles(4), voucherController.getAllVouchers);
 
 /**
  * @swagger
@@ -84,7 +85,7 @@ router.get('/', voucherController.getAllVouchers);
  *       500:
  *         description: Lỗi server
  */
-router.get('/:id', voucherController.getVoucherById);
+router.get('/:id', verifyToken, authorizeRoles(4), voucherController.getVoucherById);
 
 /**
  * @swagger
@@ -133,7 +134,7 @@ router.get('/:id', voucherController.getVoucherById);
  *       500:
  *         description: Lỗi server
  */
-router.post('/', voucherController.createVoucher);
+router.post('/', verifyToken, authorizeRoles(4), voucherController.createVoucher);
 
 /**
  * @swagger
@@ -187,7 +188,7 @@ router.post('/', voucherController.createVoucher);
  *       500:
  *         description: Lỗi server
  */
-router.put('/:id', voucherController.updateVoucher);
+router.put('/:id', verifyToken, authorizeRoles(4), voucherController.updateVoucher);
 
 /**
  * @swagger
@@ -214,7 +215,7 @@ router.put('/:id', voucherController.updateVoucher);
  *       500:
  *         description: Lỗi server
  */
-router.delete('/:id', voucherController.deleteVoucher);
+router.delete('/:id', verifyToken, authorizeRoles(4), voucherController.deleteVoucher);
 
 /**
  * @swagger
@@ -260,7 +261,7 @@ router.delete('/:id', voucherController.deleteVoucher);
  *       500:
  *         description: Lỗi server
  */
-router.post('/validate', voucherController.validateVoucher);
+router.post('/validate', verifyToken, authorizeRoles(4), voucherController.validateVoucher);
 
 module.exports = router;
   
