@@ -3,6 +3,8 @@ const router = express.Router();
 const voucherController = require('../controllers/voucherController');
 const verifyToken = require('../middleware/auth');
 
+router.get('/user', verifyToken ,voucherController.getVouchersByUserId);
+
 /**
  * @swagger
  * components:
@@ -261,6 +263,71 @@ router.delete('/:id', voucherController.deleteVoucher);
  *         description: Lỗi server
  */
 router.post('/validate', voucherController.validateVoucher);
+
+/**
+ * @swagger
+ * /api/vouchers/use:
+ *   post:
+ *     summary: Sử dụng voucher
+ *     tags: [Vouchers]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 description: Mã voucher cần sử dụng
+ *     responses:
+ *       200:
+ *         description: Voucher đã được sử dụng thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 voucher:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     discountAmount:
+ *                       type: number
+ *                     discountPercent:
+ *                       type: number
+ *       400:
+ *         description: Voucher không hợp lệ hoặc đã hết hạn
+ *       404:
+ *         description: Không tìm thấy voucher
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ *   get:
+ *     summary: Lấy danh sách voucher theo userId
+ *     tags: [Vouchers]
+ *     responses:
+ *       200:
+ *         description: Danh sách voucher của user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Voucher'
+ *       500:
+ *         description: Lỗi server
+ */
 
 module.exports = router;
   
