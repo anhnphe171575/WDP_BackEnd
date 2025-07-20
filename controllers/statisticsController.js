@@ -216,8 +216,10 @@ const getLowRevenueProducts = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     
+    // Lấy toàn bộ sản phẩm
+    const allProducts = await Product.find({}, '_id name');
+
     const completedOrders = await Order.find({ status: 'completed' }).populate('OrderItems');
-    
     const productStats = new Map();
 
     for (const order of completedOrders) {
@@ -255,6 +257,21 @@ const getLowRevenueProducts = async (req, res) => {
             });
           }
         }
+      }
+    }
+
+    // Thêm các sản phẩm chưa bán được đơn nào
+    for (const product of allProducts) {
+      if (!productStats.has(product._id.toString())) {
+        productStats.set(product._id.toString(), {
+          productId: product._id.toString(),
+          productName: product.name,
+          totalQuantity: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          orderCount: 0
+        });
       }
     }
 
