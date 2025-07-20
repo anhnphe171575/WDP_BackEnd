@@ -1,4 +1,5 @@
 # Node.js
+dialogflow.json
 node_modules/
 .env
 .env.local
