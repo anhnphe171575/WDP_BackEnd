@@ -20,6 +20,10 @@ const blogSchema = new mongoose.Schema({
     images: [{
         url: String
     }],
+    views: {
+        type: Number,
+        default: 0
+      }
 }, { timestamps: true });
 
 

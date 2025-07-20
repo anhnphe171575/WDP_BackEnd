@@ -84,7 +84,12 @@ exports.getAllBlogs = async (req, res) => {
 // Get single blog
 exports.getBlog = async (req, res) => {
     try {
-        const blog = await Blog.findById(req.params.id);
+        // Tăng views trước khi trả về
+        const blog = await Blog.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { views: 1 } },
+            { new: true }
+        );
 
         if (!blog) {
             return res.status(404).json({
