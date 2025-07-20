@@ -263,6 +263,14 @@ exports.VerifyEmail = async (req, res) => {
         }
       });
 
+      // Sau khi xác thực email thành công, tặng voucher và gửi email voucher cho user
+      const { assignVoucherToUser } = require('../services/voucherService');
+      try {
+        await assignVoucherToUser(user._id, 'WELCOME10', true);
+      } catch (err) {
+        console.error(err.message);
+      }
+
       // Trả về trang HTML thông báo thành công
       res.status(200).send(`
           <!DOCTYPE html>
@@ -314,7 +322,7 @@ exports.VerifyEmail = async (req, res) => {
                 <h1>Email verification successful!</h1>
                 <p>Your account has been verified.</p>
                 <p>You can login to the system right now.</p>
-                <a href="${process.env.CLIENT_URL || 'http://localhost:5000'}/login" class="button">Login</a>
+                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/login" class="button">Login</a>
               </div>
             </body>
           </html>
