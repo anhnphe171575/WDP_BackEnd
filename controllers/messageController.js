@@ -80,7 +80,23 @@ exports.getConversationsByUser = async (req, res) => {
         { staffId: id }
       ]
     }).sort({ updatedAt: -1 });
-    res.status(200).json(conversations);
+
+    // Đếm số tin nhắn chưa đọc cho từng conversation
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        const unreadCount = await Message.countDocuments({
+          conversationId: conv._id,
+          isRead: false,
+          senderId: { $ne: id }
+        });
+        // Chuyển về object, thêm trường unreadCount
+        const convObj = conv.toObject();
+        convObj.unreadCount = unreadCount;
+        return convObj;
+      })
+    );
+
+    res.status(200).json(conversationsWithUnread);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -284,3 +300,33 @@ function checkUserOnlineStatus(userId) {
     return false; // Mặc định offline nếu có lỗi
   }
 }
+
+exports.countUnreadMessages = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'userId không hợp lệ' });
+    }
+
+    // Tìm tất cả conversation mà user là customer hoặc staff
+    const conversations = await Conversation.find({
+      $or: [
+        { customerId: userId },
+        { staffId: userId }
+      ]
+    }).select('_id');
+
+    const conversationIds = conversations.map(c => c._id);
+
+    // Đếm số message chưa đọc gửi tới user này
+    const unreadCount = await Message.countDocuments({
+      conversationId: { $in: conversationIds },
+      isRead: false,
+      senderId: { $ne: userId }
+    });
+
+    res.status(200).json({ unreadCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

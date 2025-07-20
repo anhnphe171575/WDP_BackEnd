@@ -31,6 +31,7 @@ const notifiRoute = require('./routes/notificationRoute');
 const chatbotRoute = require('./routes/chatbotRoute');
 const statisticsRoute = require('./routes/statisticsRoute');
 const ticketRoute = require('./routes/ticketRoute');
+const marketingRoute = require('./routes/marketingRoute');
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,7 @@ app.use('/api/notification', notifiRoute);
 app.use('/api/chatbot', chatbotRoute);
 app.use('/api/statistics', statisticsRoute);
 app.use('/api/tickets', ticketRoute);
+app.use('/api/marketing', marketingRoute);
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
