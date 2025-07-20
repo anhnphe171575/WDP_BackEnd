@@ -146,4 +146,15 @@ Hệ thống hỗ trợ`,
   }
 };
 
+exports.sendMail = async (to, subject, html) => {
+  const info = await transporter.sendMail({
+    from: `"${process.env.EMAIL_USER}"`,
+    to,
+    subject,
+    html
+  });
+  console.log("Đã gửi email voucher thành công: %s", info.messageId);
+  return { success: true, messageId: info.messageId };
+};
+
 

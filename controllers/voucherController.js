@@ -129,9 +129,6 @@ const getVouchersByUserId = async (req, res) => {
   }
 };
 
-// Cập nhật trạng thái voucher của user khi sử dụng
-
-
 
 module.exports = {
   createVoucher,
