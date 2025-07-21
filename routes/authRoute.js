@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const verifyToken = require('../middleware/auth');
+const { ROLES } = require('../config/role.js');
+const authorizeRoles = require('../middleware/authorization.js');
 
 /**
  * @swagger
@@ -144,7 +146,7 @@ router.get('/verify-email', authController.VerifyEmail);
  *   get:
  *     summary: Lấy thông tin cá nhân (yêu cầu đăng nhập)
  */
-router.get('/myprofile', verifyToken, authController.UserProfile);
+router.get('/myprofile',  verifyToken, authController.UserProfile);
 
 /**
  * @swagger

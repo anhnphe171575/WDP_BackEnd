@@ -33,7 +33,13 @@ const addToCart = async (req, res) => {
             _id: productVariantId,
             product_id: productId
         });
-      
+        
+        // Lấy tổng tồn kho thực tế từ import_batches
+        const importBatches = await ImportBatch.aggregate([
+            { $match: { variantId: new mongoose.Types.ObjectId(productVariantId) } },
+            { $group: { _id: '$variantId', totalQuantity: { $sum: '$quantity' } } }
+        ]);
+        const totalStock = importBatches.length > 0 ? importBatches[0].totalQuantity : 0;
 
         // Find or create cart for user
         let cart = await Cart.findOne({ userId });
@@ -51,6 +57,16 @@ const addToCart = async (req, res) => {
                 item.productId.toString() === productId &&
                 item.productVariantId.toString() === productVariantId
         );
+
+        // Tính tổng số lượng sẽ có trong giỏ sau khi thêm
+        const currentQuantity = existingCartItem ? existingCartItem.quantity : 0;
+        const newTotalQuantity = currentQuantity + quantity;
+        if (newTotalQuantity > totalStock) {
+            return res.status(400).json({
+                success: false,
+                message: `Số lượng sản phẩm trong kho không đủ. Tồn kho: ${totalStock}, bạn đang cố thêm tổng cộng: ${newTotalQuantity}`
+            });
+        }
 
         if (existingCartItem) {
             existingCartItem.quantity += quantity;
@@ -262,10 +278,15 @@ const getCart = async (req, res) => {
             cartItems: cart.cartItems.map(cartItem => {
                 const variantId = cartItem.productVariantId._id.toString();
                 const importBatchData = importBatchMap[variantId] || { totalQuantity: 0, batches: [] };
+                // Lấy số lượng tồn kho thực tế từ import_batches
+                const stockAvailable = importBatchData.totalQuantity;
+                const isStockAvailable = stockAvailable >= cartItem.quantity;
 
                 return {
                     _id: cartItem._id,
                     quantity: cartItem.quantity,
+                    isStockAvailable, // true nếu đủ hàng, false nếu thiếu
+                    stockAvailable,   // số lượng còn lại trong kho
                     product: {
                         _id: cartItem.productId._id,
                         name: cartItem.productId.name,
@@ -279,7 +300,8 @@ const getCart = async (req, res) => {
                                 price: cartItem.productVariantId.sellPrice,
                                 stock: cartItem.productVariantId.stock,
                                 images: cartItem.productVariantId.images,
-                                totalImportQuantity: importBatchData.totalQuantity,
+                                totalImportQuantity: importBatchData.totalQuantity, // tồn kho thực tế từ import_batches
+                                totalImported: importBatchData.totalQuantity, // tổng nhập kho
                                 importBatches: importBatchData.batches,
                                 attributes: cartItem.productVariantId.attribute.map(attr => ({
                                     value: attr.value,
