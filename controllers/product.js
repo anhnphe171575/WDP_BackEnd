@@ -1798,6 +1798,157 @@ const updateProductVariantCostPrice = async (req, res) => {
   }
 };
 
+const getProductDashboardData = async (req, res) => {
+    try {
+        const [totalProducts, allCategories, allProducts] = await Promise.all([
+            Product.countDocuments(),
+            Category.find().lean(),
+            Product.find().select('_id category').lean()
+        ]);
+
+        const categoryMap = new Map();
+        allCategories.forEach(cat => {
+            cat._id = cat._id.toString();
+            if (cat.parentCategory) cat.parentCategory = cat.parentCategory.toString();
+            categoryMap.set(cat._id, cat);
+        });
+
+        const categoryProductSets = new Map();
+        allCategories.forEach(cat => {
+            categoryProductSets.set(cat._id, new Set());
+        });
+
+        allProducts.forEach(product => {
+            const productId = product._id.toString();
+            const uniqueCatIds = [...new Set(product.category.map(c => c.toString()))];
+            
+            uniqueCatIds.forEach(catId => {
+                let currentCatId = catId;
+                while (currentCatId) {
+                    if (categoryProductSets.has(currentCatId)) {
+                        categoryProductSets.get(currentCatId).add(productId);
+                    }
+                    const category = categoryMap.get(currentCatId);
+                    currentCatId = category ? category.parentCategory : null;
+                }
+            });
+        });
+
+        const nodes = {};
+        allCategories.forEach(cat => {
+            nodes[cat._id] = { ...cat, children: [] };
+        });
+
+        Object.values(nodes).forEach(node => {
+            if (node.parentCategory && nodes[node.parentCategory]) {
+                nodes[node.parentCategory].children.push(node);
+            }
+        });
+
+        const rootNodes = Object.values(nodes).filter(node => !node.parentCategory);
+
+        const buildResponseTree = (node) => {
+            const productCount = categoryProductSets.get(node._id).size;
+            const subCategories = node.children
+                .map(buildResponseTree)
+                .filter(child => child.productCount > 0)
+                .sort((a, b) => b.productCount - a.productCount);
+
+            const result = {
+                categoryName: node.name,
+                productCount,
+            };
+
+            if (subCategories.length > 0) {
+                result.subCategories = subCategories;
+            }
+
+            return result;
+        };
+
+        const productsByCategory = rootNodes
+            .map(buildResponseTree)
+            .filter(root => root.productCount > 0)
+            .sort((a, b) => b.productCount - a.productCount);
+
+        const productsByBrand = await Product.aggregate([
+            {
+                $group: {
+                    _id: '$brand',
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $project: {
+                    brandName: '$_id',
+                    count: 1,
+                    _id: 0
+                }
+            },
+            { $sort: { count: -1 } }
+        ]);
+        
+        const lowStockVariants = await ProductVariant.aggregate([
+            {
+                $lookup: {
+                    from: 'importbatches',
+                    localField: '_id',
+                    foreignField: 'variantId',
+                    as: 'importBatches'
+                }
+            },
+            {
+                $addFields: {
+                    totalQuantity: { $sum: '$importBatches.quantity' }
+                }
+            },
+            {
+                $match: {
+                    totalQuantity: { $lte: 10 }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'product_id',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            { $unwind: '$productDetails' },
+            {
+                $project: {
+                    productName: '$productDetails.name',
+                    variantId: '$_id',
+                    images: '$images',
+                    totalQuantity: 1,
+                    _id: 0
+                }
+            },
+            { $limit: 10 }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalProducts,
+                totalLowStock: lowStockVariants.length,
+                productsByCategory,
+                productsByBrand,
+                lowStockVariants
+            }
+        });
+
+    } catch (error) {
+        console.error('Error getting product dashboard data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting product dashboard data',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getTopSellingProducts,
     getProductsByCategory,
@@ -1820,5 +1971,6 @@ module.exports = {
     getAllBestSellingProducts,
     getProductsBySearch,
     getAllWorstSellingProducts,
-    updateProductVariantCostPrice
+    updateProductVariantCostPrice,
+    getProductDashboardData
 };
