@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch, updateProductVariantCostPrice } = require('../controllers/product');
+const { getTopSellingProducts, getAllProducts, getProductVariantsByProductId, getProductsBySearch, getAllBestSellingProducts, getAllWorstSellingProducts, getChildAttributesByProductId, getChildAttributesByParentId, getProductById, createProductVariant, updateProductVariant, deleteProductVariant,createProduct, deleteProduct , getProductsByCategory, getProductDetailsByCategory,updateProduct, getImportBatchesByVariantId, createImportBatch, updateImportBatch, deleteImportBatch, updateProductVariantCostPrice, getProductDashboardData } = require('../controllers/product');
 const { upload } = require('../config/cloudinary');
 const  verifyToken  = require('../middleware/auth');
 const  authorizeRoles = require('../middleware/authorization');
@@ -25,6 +25,24 @@ const  authorizeRoles = require('../middleware/authorization');
  *         description: Lỗi request
  */
 router.get('/top-selling', getTopSellingProducts);
+
+/**
+ * @swagger     
+ * /api/products/dashboard:
+ *   get:
+ *     tags: [Products]
+ *     summary: Lấy dữ liệu tổng quan cho dashboard sản phẩm
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *       401:
+ *         description: Không có quyền truy cập
+ *       500:
+ *         description: Lỗi server
+ */
+router.get('/dashboard', verifyToken, authorizeRoles(8), getProductDashboardData);
 
 /**
  * @swagger
