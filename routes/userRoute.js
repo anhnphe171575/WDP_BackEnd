@@ -24,7 +24,7 @@ router.get('/export-csv', userController.exportUsersToCSV);
  *         description: Thành công
  */
 router.get('/', userController.getAllUsers);
-
+router.get('/admin', verifyToken, authorizeRoles(0), userController.getAllUsers);
 /**
  * @swagger
  * /api/users/dashboard:
