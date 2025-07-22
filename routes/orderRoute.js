@@ -157,7 +157,7 @@ router.get('/revenue',verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderCon
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.post('/', orderController.createOrder);
+router.post('/',verifyToken, orderController.createOrder);
 
 /**
  * @swagger
@@ -208,7 +208,7 @@ router.get('/', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderControlle
  *       500:
  *         description: Lỗi server
  */
-router.put('/bulk-update-status', orderController.updateBulkStatus);
+router.put('/bulk-update-status', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateBulkStatus);
 
 /**
  * @swagger
@@ -365,7 +365,7 @@ router.get('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id',  orderController.updateOrder);
+router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateOrder);
 
 /**
  * @swagger

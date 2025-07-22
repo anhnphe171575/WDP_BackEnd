@@ -3,6 +3,7 @@ const router = express.Router();
 const bannerController = require('../controllers/bannerController');
 const { upload } = require('../config/cloudinary');
 const authorizeRoles = require('../middleware/authorization');
+const verifyToken = require('../middleware/auth');
 
 /**
  * @swagger
@@ -122,12 +123,12 @@ router.post('/', upload.single('image'),authorizeRoles(4), bannerController.crea
 router.get('/', bannerController.getAllBanners);
 
 // Get a single banner by ID
-router.get('/:id', bannerController.getBannerById);
+router.get('/:id', verifyToken, authorizeRoles(4), bannerController.getBannerById);
 
 // Update a banner
-router.put('/:id', upload.single('image'),authorizeRoles(4), bannerController.updateBanner);
+router.put('/:id', verifyToken, authorizeRoles(4), upload.single('image'), bannerController.updateBanner);
 
 // Delete a banner
-router.delete('/:id', authorizeRoles(4), bannerController.deleteBanner);
+router.delete('/:id', verifyToken, authorizeRoles(4), bannerController.deleteBanner);
 
 module.exports = router;
