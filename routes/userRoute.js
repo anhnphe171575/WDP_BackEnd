@@ -12,7 +12,7 @@ const  authorizeRoles  = require('../middleware/authorization');
  *   description: Quản lý người dùng
  */
 // Export users csv
-router.get('/export-csv', userController.exportUsersToCSV);
+router.get('/export-csv', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.exportUsersToCSV);
 /**
  * @swagger
  * /api/users:
@@ -23,7 +23,7 @@ router.get('/export-csv', userController.exportUsersToCSV);
  *       200:
  *         description: Thành công
  */
-router.get('/', userController.getAllUsers);
+router.get('/', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.getAllUsers);
 
 /**
  * @swagger
@@ -187,7 +187,7 @@ router.get('/', userController.getAllUsers);
  *       500:
  *         description: Lỗi server
  */
-router.get('/dashboard', userController.getUserDashboard);
+router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getUserDashboard);
 
 /**
  * @swagger
@@ -262,12 +262,12 @@ router.delete('/addresses/:addressId', verifyToken, userController.deleteAddress
 router.put('/edit-profile', verifyToken, userController.updateProfile);
 
 // Test routes cho Cron Job
-router.get('/banned', userController.getBannedUsers);
-router.post('/unban', userController.manualUnbanUsers);
+router.get('/banned', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getBannedUsers);
+router.post('/unban', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.manualUnbanUsers);
 
-router.put('/:id', userController.updateUser);
-router.get('/:id', verifyToken, userController.getUserById);
-router.delete('/:id', userController.deleteUser);
+router.put('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.updateUser);
+router.get('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getUserById);
+router.delete('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.deleteUser);
 
 /**
  * @swagger
@@ -292,7 +292,7 @@ router.delete('/:id', userController.deleteUser);
  *       201:
  *         description: Tạo thành công
  */
-router.post('/', userController.createUser);
+router.post('/', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.createUser);
 
 /**
  * @swagger
@@ -358,7 +358,7 @@ router.post('/', userController.createUser);
  */
 
 // Import users from CSV
-router.post('/import-csv', userController.importUsersFromCSV);
+router.post('/import-csv', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.importUsersFromCSV);
 
 
 
