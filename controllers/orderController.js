@@ -8,6 +8,7 @@ const ImportBatch = require('../models/import_batches');
 const Notification = require('../models/notificationModel');
 const User = require('../models/userModel');
 const { getIO } = require('../config/socket.io');
+const { assignVoucherToUser } = require('../services/voucherService');
 
 // Create new order
 exports.createOrder = async (req, res) => {
@@ -24,6 +25,24 @@ exports.createOrder = async (req, res) => {
         });
 
         const savedOrder = await order.save();
+
+        // Sau khi tạo đơn hàng, nếu đơn hàng là hoàn thành (hoặc trạng thái bạn muốn), cập nhật tổng chi tiêu và tặng voucher
+        if (status === 'completed') {
+            // Tính tổng chi tiêu của user dựa trên các đơn hàng đã hoàn thành
+            const completedOrders = await Order.find({ userId, status: 'completed' });
+            const totalSpent = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+            // Ngưỡng chi tiêu để tặng voucher
+            const threshold = 5000000; // 5 triệu
+            if (totalSpent >= threshold) {
+                try {
+                    await assignVoucherToUser(userId, 'BIGSPENDER');
+                } catch (err) {
+                    console.error(err.message);
+                }
+            }
+        }
+
         res.status(201).json(savedOrder);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -926,5 +945,7 @@ exports.getRecommendImports = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+
 
 

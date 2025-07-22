@@ -29,6 +29,10 @@ const voucherSchema = new mongoose.Schema({
   usedCount: {
     type: Number,
     default: 0,
+  },
+  minOrderValue: { 
+    type: Number,
+    default: 0,
   }
 }, {
   timestamps: true,

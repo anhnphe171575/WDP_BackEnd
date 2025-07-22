@@ -9,10 +9,12 @@ const Cart = require("../models/cart");
 const CartItem = require("../models/cartItem");
 const ImportBatch = require("../models/import_batches");
 const User = require("../models/userModel");
+const Voucher = require("../models/voucher");
+const VoucherUser = require("../models/voucherUser");
 
 exports.createPayment = async (req, res) => {
   const userId = req.user.id;    
-    const {  addressId, amount, shippingMethod, paymentMethod, items,rebuyItems } = req.body;
+    const {  addressId, amount, shippingMethod, paymentMethod, items,rebuyItems,voucherId} = req.body;
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const timestamp = Date.now() % 1000000; 
     const orderCode = Number(`${timestamp}${randomNum}`.slice(-9)); 
@@ -21,7 +23,7 @@ exports.createPayment = async (req, res) => {
         orderCode,
         amount: amount,
         description: 'Thanh toan don hang',
-        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}&rebuyItems=${encodeURIComponent(JSON.stringify(rebuyItems))}`,
+        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}&rebuyItems=${encodeURIComponent(JSON.stringify(rebuyItems))}&voucherId=${encodeURIComponent(voucherId)}`,
         cancelUrl: `http://localhost:3000/payment/result`   
     };
     try {
@@ -39,9 +41,8 @@ exports.createPayment = async (req, res) => {
 
 exports.callback = async (req, res) => {
   try {
-    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode, rebuyItems } = req.body;
+    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode, rebuyItems,voucherId } = req.body;
     const userId = req.user?.id || req.body.userId; // Lấy userId từ req nếu có
-    console.log("rebuyItems",rebuyItems);
 
     // Parse items từ JSON string nếu cần
     let parsedItems = items;
@@ -66,7 +67,7 @@ exports.callback = async (req, res) => {
     }
     // Đảm bảo parsedRebuyItems là array
     if (!Array.isArray(parsedRebuyItems)) {
-      parsedRebuyItems = [];
+        parsedRebuyItems = [parsedRebuyItems];
     }
 
     if (code === "00" && status === "PAID" && cancel === "false") {
@@ -125,26 +126,38 @@ exports.callback = async (req, res) => {
         await orderItem.save();
         orderItemIds.push(orderItem._id);
       }
+      const voucherUser = await VoucherUser.findById( voucherId);
 
       // Tạo Order mới
       const newOrder = new OrderModel({
         userId: userId,
-        OrderItems: orderItemIds,
+        OrderItems: orderItemIds, 
         total: amount,
-        status: "pending",
         paymentMethod: paymentMethod,
         address: addressObj,
+        voucher: voucherUser.voucherId ? [voucherUser.voucherId] : []
       });
       await newOrder.save();
+
+      // Nếu có voucherId thì cập nhật trạng thái voucher
+      if (voucherId) {
+        const voucherUser = await VoucherUser.findByIdAndUpdate(
+          voucherId,  
+          { used: true, usedAt: new Date() }
+        );
+        console.log("voucherUser:", voucherUser);
+        // Update Voucher: increment usedCount
+        await Voucher.findByIdAndUpdate(
+          voucherUser.voucherId,
+          { $inc: { usedCount: 1 } }
+        );
+      }
 
       // Xác định các cart item cần xóa (loại trừ rebuyItems)
       const cartItemsToDelete = Array.isArray(parsedRebuyItems) && parsedRebuyItems.length > 0
         ? cartItemIds.filter(id => !parsedRebuyItems.includes(id.toString()))
         : cartItemIds;
-      console.log("parsedRebuyItems:", parsedRebuyItems);
-      console.log("cartItemIds:", cartItemIds);
-      console.log("cartItemsToDelete:", cartItemsToDelete);
-      console.log("Should keep items:", parsedRebuyItems);
+    
       // Xóa các cart item khỏi CartItem (chỉ những item không trong rebuyItems)
       if (cartItemsToDelete.length > 0) {
         await CartItem.deleteMany({ _id: { $in: cartItemsToDelete } });
@@ -217,17 +230,33 @@ exports.callback = async (req, res) => {
         await orderItem.save();
         orderItemIds.push(orderItem._id);
       }
-
+      const voucherUser = await VoucherUser.findById( voucherId);
       // Tạo Order mới
       const newOrder = new OrderModel({
         userId: userId,
         OrderItems: orderItemIds,
         total: amount,
-        status: "pending",
         paymentMethod: paymentMethod,
         address: addressObj,
+        voucher: voucherUser.voucherId ? [voucherUser.voucherId] : []
       });
       await newOrder.save();
+
+      // Nếu có voucherId thì cập nhật trạng thái voucher
+      if (voucherId) {
+       
+        const voucherUser = await VoucherUser.findByIdAndUpdate(
+          voucherId,  
+          { used: true, usedAt: new Date() }
+        );
+        console.log("voucherUser:", voucherUser);
+        // Update Voucher: increment usedCount
+        await Voucher.findByIdAndUpdate(
+          voucherUser.voucherId,
+          { $inc: { usedCount: 1 } }
+        );
+       
+      }
 
       // Xác định các cart item cần xóa (loại trừ rebuyItems)
       const cartItemsToDelete = Array.isArray(parsedRebuyItems) && parsedRebuyItems.length > 0

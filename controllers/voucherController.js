@@ -1,4 +1,5 @@
 const Voucher = require('../models/voucher');
+const VoucherUser = require('../models/voucherUser');
 
 // Tạo voucher mới
 const createVoucher = async (req, res) => {
@@ -116,11 +117,25 @@ const validateVoucher = async (req, res) => {
   }
 };
 
+// Lấy danh sách voucher theo userId
+const getVouchersByUserId = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(userId)
+    const vouchers = await VoucherUser.find({ userId }).populate('voucherId');
+    res.status(200).json(vouchers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 module.exports = {
   createVoucher,
   getAllVouchers,
   getVoucherById,
   updateVoucher,
   deleteVoucher,
-  validateVoucher
+  validateVoucher,
+  getVouchersByUserId
 };

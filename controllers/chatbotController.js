@@ -1,3 +1,5 @@
+const path = require('path');
+const dialogflow = require('dialogflow');
 const Product = require('../models/product');
 const Category = require('../models/category');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -5,6 +7,16 @@ const stringSimilarity = require('string-similarity');
 const faqList = require('./faq');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Lấy credentials Dialogflow từ file
+const credentials = require(path.join(__dirname, '../dialogflow.json'));
+const projectId = credentials.project_id;
+const sessionClient = new dialogflow.SessionsClient({
+  credentials: {
+    client_email: credentials.client_email,
+    private_key: credentials.private_key,
+  },
+});
 
 // Lấy dữ liệu sản phẩm
 async function getProductsData() {
@@ -32,8 +44,41 @@ exports.chatWithBot = async (req, res) => {
     if (!GEMINI_API_KEY) {
       return res.status(500).json({ reply: 'Chưa cấu hình GEMINI_API_KEY.' });
     }
+    if (!userMessage) {
+      return res.status(400).json({ reply: 'Không có tin nhắn.' });
+    }
 
-    // 1. Kiểm tra FAQ dựa trên từ khóa
+    // 1. Thử trả lời bằng Dialogflow trước
+    try {
+      const sessionId = req.body.sessionId || 'default-session';
+      const sessionPath = sessionClient.sessionPath(projectId, sessionId);
+      const dfRequest = {
+        session: sessionPath,
+        queryInput: {
+          text: {
+            text: userMessage,
+            languageCode: 'vi',
+          },
+        },
+      };
+      const dfResponses = await sessionClient.detectIntent(dfRequest);
+      const dfResult = dfResponses[0].queryResult;
+      const fulfillment = dfResult.fulfillmentText && dfResult.fulfillmentText.trim();
+      // Chỉ trả về fulfillmentText nếu intent không phải là fallback
+      if (
+        fulfillment &&
+        fulfillment.length > 0 &&
+        dfResult.intent &&
+        dfResult.intent.displayName !== 'Default Fallback Intent'
+      ) {
+        return res.json({ reply: fulfillment });
+      }
+    } catch (dfErr) {
+      // Nếu Dialogflow lỗi, bỏ qua và fallback sang Gemini
+      console.warn('Dialogflow error, fallback to Gemini:', dfErr.message);
+    }
+
+    // 2. Kiểm tra FAQ dựa trên từ khóa
     if (userMessage) {
       const lowerUserMsg = userMessage.toLowerCase();
       for (const faq of faqList) {
@@ -101,7 +146,7 @@ ${JSON.stringify(categoriesInfo, null, 2)}
 
     res.json({ reply });
   } catch (error) {
-    console.error('Lỗi khi xử lý Gemini:', error);
+    console.error('Lỗi khi xử lý Gemini/Dialogflow:', error);
     res.status(500).json({ reply: 'Lỗi khi xử lý yêu cầu.', error: error.message });
   }
 }; 

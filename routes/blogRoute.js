@@ -16,16 +16,18 @@ const {
 
 
 // Create blog - POST /api/blogs
-router.post('/', verifyToken, upload.array('images', 5),authorizeRoles(4), createBlog);
+router.post('/', verifyToken, upload.array('images', 5), createBlog);
 
 router.get('/marketing', verifyToken,authorizeRoles(ROLES.MARKETING_MANAGER, ROLES.ORDER_MANAGER), getAllBlogs);
 
-router.get('/customer', verifyToken,authorizeRoles(1), getAllBlogs);
+router.get('/customer', verifyToken, getAllBlogs);
 
-router.get('/:id', getBlog);
+router.get('/', getAllBlogs);
+
+router.get('/:id',verifyToken, getBlog);
 
 
-router.put('/:id', verifyToken, upload.array('images', 5),authorizeRoles(4), updateBlog);
+router.put('/:id', verifyToken, upload.array('images', 5), updateBlog);
 
 
 router.delete('/:id', verifyToken,authorizeRoles(4), deleteBlog);

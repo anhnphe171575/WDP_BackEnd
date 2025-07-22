@@ -216,8 +216,10 @@ const getLowRevenueProducts = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     
+    // Lấy toàn bộ sản phẩm
+    const allProducts = await Product.find({}, '_id name');
+
     const completedOrders = await Order.find({ status: 'completed' }).populate('OrderItems');
-    
     const productStats = new Map();
 
     for (const order of completedOrders) {
@@ -258,6 +260,21 @@ const getLowRevenueProducts = async (req, res) => {
       }
     }
 
+    // Thêm các sản phẩm chưa bán được đơn nào
+    for (const product of allProducts) {
+      if (!productStats.has(product._id.toString())) {
+        productStats.set(product._id.toString(), {
+          productId: product._id.toString(),
+          productName: product.name,
+          totalQuantity: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          orderCount: 0
+        });
+      }
+    }
+
     let statistics = Array.from(productStats.values()).map(stat => ({
       ...stat,
       profitMargin: stat.totalRevenue > 0 ? (stat.totalProfit / stat.totalRevenue * 100) : 0
@@ -282,8 +299,106 @@ const getLowRevenueProducts = async (req, res) => {
   }
 };
 
+// Dashboard Marketing tổng hợp
+const getMarketingDashboard = async (req, res) => {
+  try {
+    const [
+      bannerModel,
+      blogModel,
+      ticketModel,
+      voucherModel,
+      reviewModel
+    ] = [
+      require('../models/bannerModel'),
+      require('../models/blogModel'),
+      require('../models/ticketModel'),
+      require('../models/voucher'),
+      require('../models/reviewModel')
+    ];
+
+    // Banner
+    const totalBanners = await bannerModel.countDocuments();
+    const activeBanners = await bannerModel.countDocuments({ status: 'active' });
+    const inactiveBanners = await bannerModel.countDocuments({ status: { $ne: 'active' } });
+    const bannersExpiringSoon = await bannerModel.find({ endDate: { $gte: new Date(), $lte: new Date(Date.now() + 7*24*60*60*1000) } });
+
+    // Blog
+    const totalBlogs = await blogModel.countDocuments();
+    const blogsThisMonth = await blogModel.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } });
+    const topBlogs = await blogModel.find().sort({ views: -1 }).limit(5);
+
+    // Ticket
+    const totalTickets = await ticketModel.countDocuments();
+    const openTickets = await ticketModel.countDocuments({ status: 'open' });
+    const closedTickets = await ticketModel.countDocuments({ status: 'closed' });
+    const avgTicketResolveTime = await ticketModel.aggregate([
+      { $match: { status: 'closed', closedAt: { $exists: true } } },
+      { $project: { diff: { $subtract: ['$closedAt', '$createdAt'] } } },
+      { $group: { _id: null, avg: { $avg: '$diff' } } }
+    ]);
+
+    // Voucher
+    const totalVouchers = await voucherModel.countDocuments();
+    const usedVouchers = await voucherModel.countDocuments({ usedCount: { $gt: 0 } });
+    const unusedVouchers = await voucherModel.countDocuments({ usedCount: 0 });
+    const expiringVouchers = await voucherModel.find({ validTo: { $gte: new Date(), $lte: new Date(Date.now() + 7*24*60*60*1000) } });
+
+    // Review
+    const totalReviews = await reviewModel.countDocuments();
+    const avgRatingAgg = await reviewModel.aggregate([
+      { $group: { _id: null, avg: { $avg: '$rating' } } }
+    ]);
+    const avgRating = avgRatingAgg[0]?.avg || 0;
+    const reviewsThisMonth = await reviewModel.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } });
+    const topReviewedProducts = await reviewModel.aggregate([
+      { $match: { product: { $ne: null } } },
+      { $group: { _id: '$product', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        banner: {
+          total: totalBanners,
+          active: activeBanners,
+          inactive: inactiveBanners,
+          expiringSoon: bannersExpiringSoon
+        },
+        blog: {
+          total: totalBlogs,
+          thisMonth: blogsThisMonth,
+          top: topBlogs
+        },
+        ticket: {
+          total: totalTickets,
+          open: openTickets,
+          closed: closedTickets,
+          avgResolveTime: avgTicketResolveTime[0]?.avg || 0
+        },
+        voucher: {
+          total: totalVouchers,
+          used: usedVouchers,
+          unused: unusedVouchers,
+          expiringSoon: expiringVouchers
+        },
+        review: {
+          total: totalReviews,
+          avgRating,
+          thisMonth: reviewsThisMonth,
+          topProducts: topReviewedProducts
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
 module.exports = {
   getProductRevenueStatistics,
   getRevenueByTime,
-  getLowRevenueProducts
+  getLowRevenueProducts,
+  getMarketingDashboard
 }; 

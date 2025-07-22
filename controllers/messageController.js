@@ -80,7 +80,23 @@ exports.getConversationsByUser = async (req, res) => {
         { staffId: id }
       ]
     }).sort({ updatedAt: -1 });
-    res.status(200).json(conversations);
+
+    // Đếm số tin nhắn chưa đọc cho từng conversation
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        const unreadCount = await Message.countDocuments({
+          conversationId: conv._id,
+          isRead: false,
+          senderId: { $ne: id }
+        });
+        // Chuyển về object, thêm trường unreadCount
+        const convObj = conv.toObject();
+        convObj.unreadCount = unreadCount;
+        return convObj;
+      })
+    );
+
+    res.status(200).json(conversationsWithUnread);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

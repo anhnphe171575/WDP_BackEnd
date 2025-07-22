@@ -11,7 +11,7 @@ router.post('/', verifyToken, upload.array('images', 5), reviewController.create
 router.get('/', reviewController.getAllReviews);
 
 // Get reviews by product ID
-router.get('/product/:productId', authorizeRoles(4), reviewController.getReviewsByProduct);
+router.get('/product/:productId',verifyToken,authorizeRoles(4), reviewController.getReviewsByProduct);
 
 // Get reviews by user ID
 router.get('/user/:userId', reviewController.getReviewsByUser);
