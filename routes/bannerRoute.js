@@ -120,7 +120,7 @@ const verifyToken = require('../middleware/auth');
 router.post('/', upload.single('image'),authorizeRoles(4), bannerController.createBanner);
 
 // Get all banners
-router.get('/', verifyToken, authorizeRoles(4), bannerController.getAllBanners);
+router.get('/', bannerController.getAllBanners);
 
 // Get a single banner by ID
 router.get('/:id', verifyToken, authorizeRoles(4), bannerController.getBannerById);
