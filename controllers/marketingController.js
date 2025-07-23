@@ -15,6 +15,13 @@ exports.getDashboardData = async (req, res) => {
     const totalBanners = await Banner.countDocuments({ startDate: { $gte: start, $lt: end } });
     const totalReviews = await Review.countDocuments({ createdAt: { $gte: start, $lt: end } });
     const totalSupportRequests = await Ticket.countDocuments({ createdAt: { $gte: start, $lt: end } });
+    // Voucher
+    const Voucher = require('../models/voucher');
+    const VoucherUser = require('../models/voucherUser');
+    const totalVouchers = await Voucher.countDocuments();
+    const usedVouchers = await Voucher.countDocuments({ usedCount: { $gt: 0 }, createdAt: { $gte: start, $lt: end } });
+    const unusedVouchers = await Voucher.countDocuments({ usedCount: 0, createdAt: { $gte: start, $lt: end } });
+    const expiringVouchers = await Voucher.countDocuments({ validTo: { $gte: new Date(), $lte: new Date(Date.now() + 7*24*60*60*1000) }, createdAt: { $gte: start, $lt: end } });
 
     // Thống kê review
     const positiveReviews = await Review.countDocuments({ rating: { $gte: 4 }, createdAt: { $gte: start, $lt: end } });
@@ -47,6 +54,20 @@ exports.getDashboardData = async (req, res) => {
     // Top 5 blog nhiều lượt xem nhất
     const topBlogs = await Blog.find({ createdAt: { $gte: start, $lt: end } }).sort({ views: -1 }).limit(5);
 
+    // Lấy dữ liệu voucher
+    const vouchers = await Voucher.find();
+    // Lấy số người đã nhận và đã sử dụng cho từng voucher
+    const voucherStats = await Promise.all(vouchers.map(async (v) => {
+      const received = await VoucherUser.countDocuments({ voucherId: v._id });
+      const used = await VoucherUser.countDocuments({ voucherId: v._id, used: true });
+      return {
+        _id: v._id,
+        code: v.code,
+        received,
+        used
+      };
+    }));
+
     res.json({
       summary: {
         totalBlogs,
@@ -57,6 +78,11 @@ exports.getDashboardData = async (req, res) => {
         negativeReviews,
         resolvedSupport,
         unresolvedSupport,
+        // Voucher
+        totalVouchers,
+        usedVouchers,
+        unusedVouchers,
+        expiringVouchers,
       },
       monthlyStats,
       latest: {
@@ -66,6 +92,7 @@ exports.getDashboardData = async (req, res) => {
       },
       topBlogs: topBlogs.map(b => ({ title: b.title, views: b.views || 0 })),
       year,
+      voucherStats,
     });
   } catch (err) {
     res.status(500).json({ error: 'Lỗi lấy dữ liệu dashboard marketing', details: err.message });
