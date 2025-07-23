@@ -187,6 +187,9 @@ router.get('/', verifyToken,  userController.getAllUsers);
  *       500:
  *         description: Lỗi server
  */
+
+router.get('/admin',verifyToken,authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.getAllUsers);
+
 router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getUserDashboard);
 
 /**
