@@ -136,16 +136,59 @@ const getProductsBySearch = async (req, res) => {
 
         // Lấy variants và attribute cho từng sản phẩm
         const productIds = products.map(p => p._id);
-        const variants = await ProductVariant.find({ product_id: { $in: productIds } })
-            .populate({
-                path: 'attribute',
-                select: 'value description',
-                populate: {
-                    path: 'parentId',
-                    select: 'value'
+        const variants = await ProductVariant.find({ product_id: { $in: productIds } }).lean();
+        const variantIds = variants.map(v => v._id);
+
+        // Tính tổng nhập kho cho từng variant
+        const ImportBatch = require('../models/import_batches');
+        const importAgg = await ImportBatch.aggregate([
+            { $match: { variantId: { $in: variantIds } } },
+            { $group: { _id: '$variantId', importedQuantity: { $sum: '$quantity' } } }
+        ]);
+        const importMap = importAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.importedQuantity;
+            return map;
+        }, {});
+
+        // Tính tổng đã bán cho từng variant (chỉ đơn completed/shipping/processing)
+        const Order = require('../models/order');
+        const soldAgg = await Order.aggregate([
+            { $match: { status: { $in: ['completed', 'shipping', 'processing'] } } },
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetail'
                 }
-            })
-            .lean();
+            },
+            { $unwind: '$orderItemDetail' },
+            { $match: { 'orderItemDetail.productVariant': { $in: variantIds } } },
+            {
+                $group: {
+                    _id: '$orderItemDetail.productVariant',
+                    orderedQuantity: { $sum: '$orderItemDetail.quantity' }
+                }
+            }
+        ]);
+        const soldMap = soldAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.orderedQuantity;
+            return map;
+        }, {});
+
+        // Gắn availableQuantity vào từng variant
+        const variantsWithStock = variants.map(variant => {
+            const imported = importMap[variant._id.toString()] || 0;
+            const ordered = soldMap[variant._id.toString()] || 0;
+            const available = imported - ordered;
+            return {
+                ...variant,
+                importedQuantity: imported,
+                orderedQuantity: ordered,
+                availableQuantity: available
+            };
+        });
 
         // Lấy reviews cho tất cả sản phẩm
         const Review = require('../models/reviewModel');
@@ -156,7 +199,7 @@ const getProductsBySearch = async (req, res) => {
         // Gắn variants và reviews vào từng product
         const productMap = {};
         products.forEach(p => { productMap[p._id.toString()] = { ...p, variants: [], reviews: [] }; });
-        variants.forEach(variant => {
+        variantsWithStock.forEach(variant => {
             const pid = variant.product_id.toString();
             if (productMap[pid]) {
                 productMap[pid].variants.push(variant);
@@ -195,13 +238,13 @@ const getProductsByCategory = async (req, res) => {
         }
         const objectCategoryId = new mongoose.Types.ObjectId(categoryId);
 
+        // Step 1: Get all products in the category with their variants
         const products = await Product.aggregate([
             {
                 $match: {
                     category: objectCategoryId
                 }
             },
-            // Lookup to get product variants
             {
                 $lookup: {
                     from: 'productvariants',
@@ -210,9 +253,8 @@ const getProductsByCategory = async (req, res) => {
                     as: 'variants'
                 }
             },
-            // Unwind variants to work with individual variants
             { $unwind: '$variants' },
-            // Lookup to get import batches for each variant
+            // Lookup import batches for each variant
             {
                 $lookup: {
                     from: 'importbatches',
@@ -221,11 +263,50 @@ const getProductsByCategory = async (req, res) => {
                     as: 'importBatches'
                 }
             },
-            // Calculate total quantity for each variant
+            // Lookup ordered quantity for each variant (from completed orders)
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    let: { variantId: '$variants._id' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ['$productVariant', '$$variantId'] }
+                            }
+                        },
+                        // Join to orders to filter only completed
+                        {
+                            $lookup: {
+                                from: 'orders',
+                                localField: 'orderId',
+                                foreignField: '_id',
+                                as: 'order'
+                            }
+                        },
+                        { $unwind: '$order' },
+                        { $match: { 'order.status': 'completed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalOrdered: { $sum: '$quantity' }
+                            }
+                        }
+                    ],
+                    as: 'orderedInfo'
+                }
+            },
+            // Calculate available quantity
             {
                 $addFields: {
-                    'variants.totalQuantity': {
-                        $sum: '$importBatches.quantity'
+                    'variants.importedQuantity': { $sum: '$importBatches.quantity' },
+                    'variants.orderedQuantity': {
+                        $ifNull: [ { $arrayElemAt: ['$orderedInfo.totalOrdered', 0] }, 0 ]
+                    },
+                    'variants.availableQuantity': {
+                        $subtract: [
+                            { $sum: '$importBatches.quantity' },
+                            { $ifNull: [ { $arrayElemAt: ['$orderedInfo.totalOrdered', 0] }, 0 ] }
+                        ]
                     }
                 }
             },
@@ -240,12 +321,19 @@ const getProductsByCategory = async (req, res) => {
                     variants: { $push: '$variants' }
                 }
             },
-            // Match only products that have at least one variant with quantity > 0
+            // Only include products with at least one variant with availableQuantity > 0
             {
-                $match: {
-                    'variants.totalQuantity': { $gt: 0 }
+                $addFields: {
+                    variants: {
+                        $filter: {
+                            input: '$variants',
+                            as: 'variant',
+                            cond: { $gt: ['$$variant.availableQuantity', 0] }
+                        }
+                    }
                 }
             },
+            { $match: { 'variants.0': { $exists: true } } },
             // Project final fields
             {
                 $project: {
@@ -261,6 +349,14 @@ const getProductsByCategory = async (req, res) => {
                             initialValue: [],
                             in: { $concatArrays: ['$$value', '$$this'] }
                         }
+                    },
+                    variants: {
+                        _id: 1,
+                        sellPrice: 1,
+                        images: 1,
+                        importedQuantity: 1,
+                        orderedQuantity: 1,
+                        availableQuantity: 1
                     }
                 }
             }
@@ -282,233 +378,107 @@ const getProductsByCategory = async (req, res) => {
 const getAllBestSellingProducts = async (req, res) => {
     try {
         // Lấy tất cả sản phẩm bán chạy nhất, không lọc theo category
-        const topProducts = await Order.aggregate([
+        // 1. Lấy top 5 sản phẩm bán chạy nhất (theo tổng số lượng bán ra)
+        const Order = require('../models/order');
+        const Product = require('../models/product');
+        const ProductVariant = require('../models/productVariant');
+        const ImportBatch = require('../models/import_batches');
+        const Category = require('../models/category');
+
+        // Lấy tổng số lượng bán cho từng sản phẩm
+        const sales = await Order.aggregate([
+            { $match: { status: { $in: ['completed', 'shipping', 'processing'] } } },
             { $unwind: '$OrderItems' },
             {
                 $lookup: {
                     from: 'orderitems',
-                    localField: 'OrderItems.orderItem_id',
+                    localField: 'OrderItems',
                     foreignField: '_id',
-                    as: 'orderItemDetails'
+                    as: 'orderItemDetail'
                 }
             },
-            { $unwind: '$orderItemDetails' },
+            { $unwind: '$orderItemDetail' },
             {
                 $group: {
-                    _id: '$orderItemDetails.product',
-                    totalSold: { $sum: '$orderItemDetails.quantity' }
+                    _id: '$orderItemDetail.productId',
+                    totalSold: { $sum: '$orderItemDetail.quantity' }
                 }
             },
             { $sort: { totalSold: -1 } },
-            { $limit: 5 },
+            { $limit: 5 }
+        ]);
+        const topProductIds = sales.map(s => s._id);
+        // Lấy thông tin sản phẩm
+        const products = await Product.find({ _id: { $in: topProductIds } }).lean();
+        // Lấy tất cả variants của các sản phẩm này
+        const variants = await ProductVariant.find({ product_id: { $in: topProductIds } }).lean();
+        const variantIds = variants.map(v => v._id);
+        // Tính tổng nhập kho cho từng variant
+        const importAgg = await ImportBatch.aggregate([
+            { $match: { variantId: { $in: variantIds } } },
+            { $group: { _id: '$variantId', importedQuantity: { $sum: '$quantity' } } }
+        ]);
+        const importMap = importAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.importedQuantity;
+            return map;
+        }, {});
+        // Tính tổng đã bán cho từng variant
+        const soldAgg = await Order.aggregate([
+            { $match: { status: { $in: ['completed', 'shipping', 'processing'] } } },
+            { $unwind: '$OrderItems' },
             {
                 $lookup: {
-                    from: 'products',
-                    localField: '_id',
+                    from: 'orderitems',
+                    localField: 'OrderItems',
                     foreignField: '_id',
-                    as: 'productDetails'
+                    as: 'orderItemDetail'
                 }
             },
-            { $unwind: '$productDetails' },
-            // Thêm lookup để lấy thông tin categories
+            { $unwind: '$orderItemDetail' },
+            { $match: { 'orderItemDetail.productVariant': { $in: variantIds } } },
             {
-                $lookup: {
-                    from: 'categories',
-                    localField: 'productDetails.category',
-                    foreignField: '_id',
-                    as: 'categories'
-                }
-            },
-            {
-                $lookup: {
-                    from: 'productvariants',
-                    localField: '_id',
-                    foreignField: 'product_id',
-                    as: 'variants'
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    name: '$productDetails.name',
-                    description: '$productDetails.description',
-                    brand: '$productDetails.brand',
-                    totalSold: 1,
-                    minSellPrice: { $min: '$variants.sellPrice' },
-                    images: {
-                        $reduce: {
-                            input: '$variants.images',
-                            initialValue: [],
-                            in: { $concatArrays: ['$$value', '$$this'] }
-                        }
-                    },
-                    categories: {
-                        $map: {
-                            input: '$categories',
-                            as: 'cat',
-                            in: {
-                                _id: '$$cat._id',
-                                name: '$$cat.name',
-                                description: '$$cat.description'
-                            }
-                        }
-                    },
-                    averageRating: 1,
-                    totalReviews: 1,
-                    reviews: 1
+                $group: {
+                    _id: '$orderItemDetail.productVariant',
+                    orderedQuantity: { $sum: '$orderItemDetail.quantity' }
                 }
             }
         ]);
-
-        console.log('Top products:', topProducts);
-
-        if (topProducts.length === 0) {
-            // Nếu không có sản phẩm nào trong order, lấy 5 sản phẩm có tổng quantity lớn nhất
-            const productsWithQuantity = await Product.aggregate([
-                {
-                    $lookup: {
-                        from: 'productvariants',
-                        localField: '_id',
-                        foreignField: 'product_id',
-                        as: 'variants'
-                    }
-                },
-                { $unwind: '$variants' },
-                {
-                    $lookup: {
-                        from: 'importbatches',
-                        localField: 'variants._id',
-                        foreignField: 'variantId',
-                        as: 'importBatches'
-                    }
-                },
-                {
-                    $addFields: {
-                        'variants.totalQuantity': { $sum: '$importBatches.quantity' }
-                    }
-                },
-                {
-                    $group: {
-                        _id: '$_id',
-                        name: { $first: '$name' },
-                        description: { $first: '$description' },
-                        brand: { $first: '$brand' },
-                        category: { $first: '$category' },
-                        variants: { $push: '$variants' },
-                        totalQuantity: { $sum: '$variants.totalQuantity' }
-                    }
-                },
-                { $sort: { totalQuantity: -1 } },
-                { $limit: 5 },
-                // Thêm lookup để lấy thông tin categories
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'categories'
-                    }
-                },
-                // Add reviews
-                {
-                    $lookup: {
-                        from: 'reviews',
-                        localField: '_id',
-                        foreignField: 'productId',
-                        as: 'reviews'
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'users',
-                        localField: 'reviews.userId',
-                        foreignField: '_id',
-                        as: 'reviewUsers'
-                    }
-                },
-                {
-                    $addFields: {
-                        averageRating: { $avg: '$reviews.rating' },
-                        totalReviews: { $size: '$reviews' },
-                        reviews: {
-                            $map: {
-                                input: '$reviews',
-                                as: 'review',
-                                in: {
-                                    _id: '$$review._id',
-                                    rating: '$$review.rating',
-                                    comment: '$$review.comment',
-                                    images: '$$review.images',
-                                    createdAt: '$$review.createdAt',
-                                    user: {
-                                        $let: {
-                                            vars: {
-                                                user: {
-                                                    $arrayElemAt: [
-                                                        {
-                                                            $filter: {
-                                                                input: '$reviewUsers',
-                                                                as: 'u',
-                                                                cond: { $eq: ['$$u._id', '$$review.userId'] }
-                                                            }
-                                                        },
-                                                        0
-                                                    ]
-                                                }
-                                            },
-                                            in: {
-                                                _id: '$$user._id',
-                                                name: '$$user.name',
-                                                avatar: '$$user.avatar'
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                {
-                    $project: {
-                        _id: 1,
-                        name: 1,
-                        description: 1,
-                        brand: 1,
-                        minSellPrice: { $min: '$variants.sellPrice' },
-                        images: {
-                            $reduce: {
-                                input: '$variants.images',
-                                initialValue: [],
-                                in: { $concatArrays: ['$$value', '$$this'] }
-                            }
-                        },
-                        totalQuantity: 1,
-                        categories: {
-                            $map: {
-                                input: '$categories',
-                                as: 'cat',
-                                in: {
-                                    _id: '$$cat._id',
-                                    name: '$$cat.name',
-                                    description: '$$cat.description'
-                                }
-                            }
-                        },
-                        averageRating: 1,
-                        totalReviews: 1,
-                        reviews: 1
-                    }
-                }
-            ]);
-            return res.status(200).json({
-                success: true,
-                data: productsWithQuantity
-            });
-        }
-
+        const soldMap = soldAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.orderedQuantity;
+            return map;
+        }, {});
+        // Gắn availableQuantity vào từng variant
+        const variantsWithStock = variants.map(variant => {
+            const imported = importMap[variant._id.toString()] || 0;
+            const ordered = soldMap[variant._id.toString()] || 0;
+            const available = imported - ordered;
+            return {
+                ...variant,
+                importedQuantity: imported,
+                orderedQuantity: ordered,
+                availableQuantity: available
+            };
+        });
+        // Gắn variants vào từng product
+        const productsWithVariants = products.map(product => {
+            const productVariants = variantsWithStock.filter(v => v.product_id.toString() === product._id.toString());
+            return {
+                ...product,
+                variants: productVariants
+            };
+        });
+        // Gắn lại số lượng bán vào từng product
+        const result = productsWithVariants.map(product => {
+            const sale = sales.find(s => s._id.toString() === product._id.toString());
+            return {
+                ...product,
+                totalSold: sale ? sale.totalSold : 0,
+                variants: product.variants
+            };
+        });
         res.status(200).json({
             success: true,
-            data: topProducts
+            data: result
         });
     } catch (error) {
         res.status(500).json({
@@ -532,125 +502,128 @@ const getProductDetailsByCategory = async (req, res) => {
 
         const objectCategoryId = new mongoose.Types.ObjectId(categoryId);
 
-        const products = await Product.aggregate([
-            { $match: { category: objectCategoryId } },
+        // 1. Lấy tất cả sản phẩm và variants trong category
+        const products = await Product.find({ category: objectCategoryId })
+            .lean();
+        const productIds = products.map(p => p._id);
+        const variants = await ProductVariant.find({ product_id: { $in: productIds } }).lean();
+        const variantIds = variants.map(v => v._id);
+
+        // 2. Tính tổng nhập kho cho từng variant
+        const ImportBatch = require('../models/import_batches');
+        const importAgg = await ImportBatch.aggregate([
+            { $match: { variantId: { $in: variantIds } } },
+            { $group: { _id: '$variantId', importedQuantity: { $sum: '$quantity' } } }
+        ]);
+        const importMap = importAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.importedQuantity;
+            return map;
+        }, {});
+
+        // 3. Tính tổng đã bán cho từng variant (chỉ đơn completed)
+        const Order = require('../models/order');
+        const OrderItem = require('../models/orderItem');
+        const soldAgg = await Order.aggregate([
+            { $match: { status: { $in: ['processing', 'completed', 'shipping'] } } },
+            { $unwind: '$OrderItems' },
             {
                 $lookup: {
-                    from: 'productvariants',
-                    localField: '_id',
-                    foreignField: 'product_id',
-                    as: 'variants'
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetail'
                 }
             },
-            // Unwind variants để join tiếp importBatches
-            { $unwind: { path: '$variants', preserveNullAndEmptyArrays: true } },
-            {
-                $lookup: {
-                    from: 'importbatches',
-                    localField: 'variants._id',
-                    foreignField: 'variantId',
-                    as: 'variants.importBatches'
-                }
-            },
-            {
-                $addFields: {
-                    'variants.totalQuantity': {
-                        $sum: '$variants.importBatches.quantity'
-                    }
-                }
-            },
-            // Gom lại từng product (gộp variants thành mảng)
+            { $unwind: '$orderItemDetail' },
+            { $match: { 'orderItemDetail.productVariant': { $in: variantIds } } },
             {
                 $group: {
-                    _id: '$_id',
-                    name: { $first: '$name' },
-                    description: { $first: '$description' },
-                    brand: { $first: '$brand' },
-                    category: { $first: '$category' },
-                    createAt: { $first: '$createAt' },
-                    updateAt: { $first: '$updateAt' },
-                    variants: { $push: '$variants' }
-                }
-            },
-            // Add reviews
-            {
-                $lookup: {
-                    from: 'reviews',
-                    localField: '_id',
-                    foreignField: 'productId',
-                    as: 'reviews'
-                }
-            },
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'reviews.userId',
-                    foreignField: '_id',
-                    as: 'reviewUsers'
-                }
-            },
-            {
-                $addFields: {
-                    averageRating: { $avg: '$reviews.rating' },
-                    totalReviews: { $size: '$reviews' },
-                    reviews: {
-                        $map: {
-                            input: '$reviews',
-                            as: 'review',
-                            in: {
-                                _id: '$$review._id',
-                                rating: '$$review.rating',
-                                comment: '$$review.comment',
-                                images: '$$review.images',
-                                createdAt: '$$review.createdAt',
-                                user: {
-                                    $let: {
-                                        vars: {
-                                            user: {
-                                                $arrayElemAt: [
-                                                    {
-                                                        $filter: {
-                                                            input: '$reviewUsers',
-                                                            as: 'u',
-                                                            cond: { $eq: ['$$u._id', '$$review.userId'] }
-                                                        }
-                                                    },
-                                                    0
-                                                ]
-                                            }
-                                        },
-                                        in: {
-                                            _id: '$$user._id',
-                                            name: '$$user.name',
-                                            avatar: '$$user.avatar'
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    name: 1,
-                    description: 1,
-                    brand: 1,
-                    category: 1,
-                    createAt: 1,
-                    updateAt: 1,
-                    variants: 1,
-                    averageRating: 1,
-                    totalReviews: 1,
-                    reviews: 1
+                    _id: '$orderItemDetail.productVariant',
+                    orderedQuantity: { $sum: '$orderItemDetail.quantity' }
                 }
             }
         ]);
+        const soldMap = soldAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.orderedQuantity;
+            return map;
+        }, {});
+
+        // 4. Gắn availableQuantity vào từng variant
+        variants.forEach(variant => {
+            const imported = importMap[variant._id.toString()] || 0;
+            const ordered = soldMap[variant._id.toString()] || 0;
+            const available = imported - ordered;
+            variant.importedQuantity = imported;
+            variant.orderedQuantity = ordered;
+            variant.availableQuantity = available;
+        });
+
+        // 5. Gắn tất cả variants vào từng product (không filter theo availableQuantity)
+        const productsWithVariants = products.map(product => {
+            const productVariants = variants.filter(v => v.product_id.toString() === product._id.toString());
+            return {
+                ...product,
+                variants: productVariants.map(v => ({
+                    _id: v._id,
+                    images: v.images,
+                    sellPrice: v.sellPrice,
+                    importedQuantity: v.importedQuantity,
+                    orderedQuantity: v.orderedQuantity,
+                    availableQuantity: v.availableQuantity,
+                    attribute: v.attribute
+                }))
+            };
+        });
+
+        // 6. Lấy reviews và user cho từng product (giữ nguyên logic cũ)
+        const productIdsWithVariants = productsWithVariants.map(p => p._id);
+        const Review = require('../models/reviewModel');
+        const reviews = await Review.find({ productId: { $in: productIdsWithVariants } })
+            .populate('userId', 'name avatar')
+            .lean();
+        const User = require('../models/userModel');
+        const users = await User.find().lean();
+        // Gắn reviews vào từng product
+        const reviewMap = {};
+        reviews.forEach(r => {
+            if (!reviewMap[r.productId]) reviewMap[r.productId] = [];
+            reviewMap[r.productId].push({
+                _id: r._id,
+                rating: r.rating,
+                comment: r.comment,
+                images: r.images,
+                createdAt: r.createdAt,
+                user: users.find(u => u._id.toString() === r.userId?._id?.toString())
+                    ? {
+                        _id: r.userId._id,
+                        name: r.userId.name,
+                        avatar: r.userId.avatar
+                    } : null
+            });
+        });
+
+        // 7. Format kết quả trả về
+        const result = productsWithVariants.map(product => {
+            const productReviews = reviewMap[product._id.toString()] || [];
+            const averageRating = productReviews.length > 0 ? (productReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / productReviews.length) : 0;
+            return {
+                _id: product._id,
+                name: product.name,
+                description: product.description,
+                brand: product.brand,
+                category: product.category,
+                createAt: product.createAt,
+                updateAt: product.updateAt,
+                variants: product.variants,
+                averageRating,
+                totalReviews: productReviews.length,
+                reviews: productReviews
+            };
+        });
 
         res.status(200).json({
             success: true,
-            data: products
+            data: result
         });
     } catch (error) {
         res.status(500).json({
@@ -672,213 +645,125 @@ const getProductById = async (req, res) => {
             });
         }
 
-        const product = await Product.aggregate([
-            { $match: { _id: new mongoose.Types.ObjectId(id) } },
-            {
-                $lookup: {
-                    from: 'productvariants',
-                    localField: '_id',
-                    foreignField: 'product_id',
-                    as: 'variants'
-                }
-            },
-            { $unwind: { path: '$variants', preserveNullAndEmptyArrays: true } },
-            {
-                $lookup: {
-                    from: 'importbatches',
-                    localField: 'variants._id',
-                    foreignField: 'variantId',
-                    as: 'variants.importBatches'
-                }
-            },
-            {
-                $addFields: {
-                    'variants.totalQuantity': {
-                        $sum: '$variants.importBatches.quantity'
-                    },
-                    'variants.importBatches': {
-                        $map: {
-                            input: '$variants.importBatches',
-                            as: 'batch',
-                            in: {
-                                _id: '$$batch._id',
-                                importDate: '$$batch.importDate',
-                                quantity: '$$batch.quantity',
-                                costPrice: '$$batch.costPrice'
-                            }
-                        }
-                    }
-                }
-            },
-            {
-                $group: {
-                    _id: '$_id',
-                    name: { $first: '$name' },
-                    description: { $first: '$description' },
-                    brand: { $first: '$brand' },
-                    category: { $first: '$category' },
-                    createAt: { $first: '$createAt' },
-                    updateAt: { $first: '$updateAt' },
-                    averageRating: { $first: '$averageRating' },
-                    totalReviews: { $first: '$totalReviews' },
-                    reviews: { $first: '$reviews' },
-                    variants: {
-                        $push: {
-                            _id: '$variants._id',
-                            images: '$variants.images',
-                            sellPrice: '$variants.sellPrice',
-                            totalQuantity: '$variants.totalQuantity',
-                            importBatches: '$variants.importBatches',
-                            attribute: '$variants.attribute',
-                            attributeDetails: '$variants.attributeDetails',
-                            attributes: '$variants.attributes'
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'categories',
-                    localField: 'category',
-                    foreignField: '_id',
-                    as: 'categoryInfo'
-                }
-            },
-            {
-                $addFields: {
-                    category: {
-                        $map: {
-                            input: '$categoryInfo',
-                            as: 'cat',
-                            in: {
-                                _id: '$$cat._id',
-                                name: '$$cat.name',
-                                description: '$$cat.description',
-                                isParent: { $eq: ['$$cat.parentCategory', null] },
-                                parentCategory: '$$cat.parentCategory'
-                            }
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'reviews',
-                    localField: '_id',
-                    foreignField: 'productId',
-                    as: 'reviews'
-                }
-            },
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'reviews.userId',
-                    foreignField: '_id',
-                    as: 'reviewUsers'
-                }
-            },
-            {
-                $addFields: {
-                    averageRating: {
-                        $avg: '$reviews.rating'
-                    },
-                    totalReviews: {
-                        $size: '$reviews'
-                    },
-                    reviews: {
-                        $map: {
-                            input: '$reviews',
-                            as: 'review',
-                            in: {
-                                _id: '$$review._id',
-                                rating: '$$review.rating',
-                                comment: '$$review.comment',
-                                images: '$$review.images',
-                                createdAt: '$$review.createdAt',
-                                user: {
-                                    $let: {
-                                        vars: {
-                                            user: {
-                                                $arrayElemAt: [
-                                                    {
-                                                        $filter: {
-                                                            input: '$reviewUsers',
-                                                            as: 'u',
-                                                            cond: { $eq: ['$$u._id', '$$review.userId'] }
-                                                        }
-                                                    },
-                                                    0
-                                                ]
-                                            }
-                                        },
-                                        in: {
-                                            _id: '$$user._id',
-                                            name: '$$user.name',
-                                            avatar: '$$user.avatar'
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            // Unwind variants to process attributes
-            { $unwind: '$variants' },
-            // Lookup attributes for each variant
-            {
-                $lookup: {
-                    from: 'attributes',
-                    localField: 'variants.attribute',
-                    foreignField: '_id',
-                    as: 'variants.attributeDetails'
-                }
-            },
-            // Gán lại attributes cho variant
-            {
-                $addFields: {
-                    'variants.attributes': '$variants.attributeDetails'
-                }
-            },
-            // Group back by product
-            {
-                $group: {
-                    _id: '$_id',
-                    name: { $first: '$name' },
-                    description: { $first: '$description' },
-                    brand: { $first: '$brand' },
-                    category: { $first: '$category' },
-                    createAt: { $first: '$createAt' },
-                    updateAt: { $first: '$updateAt' },
-                    averageRating: { $first: '$averageRating' },
-                    totalReviews: { $first: '$totalReviews' },
-                    reviews: { $first: '$reviews' },
-                    variants: {
-                        $push: {
-                            _id: '$variants._id',
-                            images: '$variants.images',
-                            sellPrice: '$variants.sellPrice',
-                            totalQuantity: '$variants.totalQuantity',
-                            importBatches: '$variants.importBatches',
-                            attribute: '$variants.attribute',
-                            attributeDetails: '$variants.attributeDetails',
-                            attributes: '$variants.attributes'
-                        }
-                    }
-                }
-            }
-        ]);
-
-        if (!product || product.length === 0) {
+        // 1. Lấy product và tất cả variants
+        const product = await Product.findById(id).lean();
+        if (!product) {
             return res.status(404).json({
                 success: false,
                 message: 'Product not found'
             });
         }
+        const variants = await ProductVariant.find({ product_id: product._id }).lean();
+        const variantIds = variants.map(v => v._id);
+
+        // 2. Lấy thông tin category (nhiều category)
+        const Category = require('../models/category');
+        let categoryInfo = [];
+        if (Array.isArray(product.category)) {
+            categoryInfo = await Category.find({ _id: { $in: product.category } }).lean();
+        } else if (product.category) {
+            const cat = await Category.findById(product.category).lean();
+            if (cat) categoryInfo = [cat];
+        }
+        // Chỉ lấy _id, name, description
+        categoryInfo = categoryInfo.map(cat => ({
+            _id: cat._id,
+            name: cat.name,
+            description: cat.description
+        }));
+
+        // 3. Tính tổng nhập kho cho từng variant
+        const ImportBatch = require('../models/import_batches');
+        const importAgg = await ImportBatch.aggregate([
+            { $match: { variantId: { $in: variantIds } } },
+            { $group: { _id: '$variantId', importedQuantity: { $sum: '$quantity' } } }
+        ]);
+        const importMap = importAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.importedQuantity;
+            return map;
+        }, {});
+
+        // 4. Tính tổng đã bán cho từng variant (chỉ đơn completed)
+        const Order = require('../models/order');
+        const soldAgg = await Order.aggregate([
+            { $match: { status: { $in: ['processing', 'completed', 'shipping'] } } },
+            { $unwind: '$OrderItems' },
+            {
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetail'
+                }
+            },
+            { $unwind: '$orderItemDetail' },
+            { $match: { 'orderItemDetail.productVariant': { $in: variantIds } } },
+            {
+                $group: {
+                    _id: '$orderItemDetail.productVariant',
+                    orderedQuantity: { $sum: '$orderItemDetail.quantity' }
+                }
+            }
+        ]);
+        const soldMap = soldAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.orderedQuantity;
+            return map;
+        }, {});
+
+        // 5. Gắn availableQuantity vào từng variant (không filter theo availableQuantity)
+        const variantsWithStock = variants.map(variant => {
+            const imported = importMap[variant._id.toString()] || 0;
+            const ordered = soldMap[variant._id.toString()] || 0;
+            const available = imported - ordered;
+            return {
+                ...variant,
+                importedQuantity: imported,
+                orderedQuantity: ordered,
+                availableQuantity: available
+            };
+        });
+
+        // 6. Lấy reviews và user cho product (giữ nguyên logic cũ)
+        const Review = require('../models/reviewModel');
+        const reviews = await Review.find({ productId: product._id })
+            .populate('userId', 'name avatar')
+            .lean();
+        const User = require('../models/userModel');
+        const users = await User.find().lean();
+        // Gắn reviews vào product
+        const productReviews = reviews.map(r => ({
+            _id: r._id,
+            rating: r.rating,
+            comment: r.comment,
+            images: r.images,
+            createdAt: r.createdAt,
+            user: users.find(u => u._id.toString() === r.userId?._id?.toString())
+                ? {
+                    _id: r.userId._id,
+                    name: r.userId.name,
+                    avatar: r.userId.avatar
+                } : null
+        }));
+        const averageRating = productReviews.length > 0 ? (productReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / productReviews.length) : 0;
+
+        // 7. Format kết quả trả về
+        const result = {
+            _id: product._id,
+            name: product.name,
+            description: product.description,
+            brand: product.brand,
+            category: categoryInfo,
+            createAt: product.createAt,
+            updateAt: product.updateAt,
+            variants: variantsWithStock,
+            averageRating,
+            totalReviews: productReviews.length,
+            reviews: productReviews
+        };
 
         res.status(200).json({
             success: true,
-            data: product[0]
+            data: result
         });
     } catch (error) {
         console.error('Error in getProductById:', error);

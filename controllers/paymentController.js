@@ -129,23 +129,10 @@ exports.callback = async (req, res) => {
           return res.status(404).json({ message: `Product variant not found: ${cartItem.productVariantId}` });
         }
 
-        // Trừ số lượng từ các lô nhập cũ nhất
-        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId })
-          .sort({ importDate: 1 }); // Sắp xếp theo ngày nhập, cũ nhất trước
-
-        let remainingQuantity = cartItem.quantity;
-        for (const batch of importBatches) {
-          if (remainingQuantity <= 0) break;
-          
-          if (batch.quantity > 0) {
-            const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
-            batch.quantity -= quantityToDeduct;
-            remainingQuantity -= quantityToDeduct;
-            await batch.save();
-          }
-        }
-
-        if (remainingQuantity > 0) {
+        // Kiểm tra tổng số lượng tồn kho của variant này
+        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId });
+        const totalStock = importBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+        if (cartItem.quantity > totalStock) {
           return res.status(400).json({ 
             message: `Insufficient stock for product variant: ${cartItem.productVariantId}` 
           });
@@ -244,23 +231,10 @@ exports.callback = async (req, res) => {
           return res.status(404).json({ message: `Product variant not found: ${cartItem.productVariantId}` });
         }
 
-        // Trừ số lượng từ các lô nhập cũ nhất
-        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId })
-          .sort({ importDate: 1 }); // Sắp xếp theo ngày nhập, cũ nhất trước
-
-        let remainingQuantity = cartItem.quantity;
-        for (const batch of importBatches) {
-          if (remainingQuantity <= 0) break;
-          
-          if (batch.quantity > 0) {
-            const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
-            batch.quantity -= quantityToDeduct;
-            remainingQuantity -= quantityToDeduct;
-            await batch.save();
-          }
-        }
-
-        if (remainingQuantity > 0) {
+        // Kiểm tra tổng số lượng tồn kho của variant này
+        const importBatches = await ImportBatch.find({ variantId: cartItem.productVariantId });
+        const totalStock = importBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+        if (cartItem.quantity > totalStock) {
           return res.status(400).json({ 
             message: `Insufficient stock for product variant: ${cartItem.productVariantId}` 
           });

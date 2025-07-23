@@ -237,35 +237,42 @@ const getCart = async (req, res) => {
             });
         }
 
-        // Get import batches for all variants in cart
+        // Get all variantIds in cart
         const variantIds = cart.cartItems.map(item => item.productVariantId._id);
-        const importBatches = await ImportBatch.aggregate([
+        // Tính tổng nhập kho cho từng variant
+        const ImportBatch = require('../models/import_batches');
+        const importAgg = await ImportBatch.aggregate([
+            { $match: { variantId: { $in: variantIds } } },
+            { $group: { _id: '$variantId', importedQuantity: { $sum: '$quantity' } } }
+        ]);
+        const importMap = importAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.importedQuantity;
+            return map;
+        }, {});
+        // Tính tổng đã bán cho từng variant (chỉ đơn completed/shipping/processing)
+        const Order = require('../models/order');
+        const soldAgg = await Order.aggregate([
+            { $match: { status: { $in: ['completed', 'shipping', 'processing'] } } },
+            { $unwind: '$OrderItems' },
             {
-                $match: {
-                    variantId: { $in: variantIds }
+                $lookup: {
+                    from: 'orderitems',
+                    localField: 'OrderItems',
+                    foreignField: '_id',
+                    as: 'orderItemDetail'
                 }
             },
+            { $unwind: '$orderItemDetail' },
+            { $match: { 'orderItemDetail.productVariant': { $in: variantIds } } },
             {
                 $group: {
-                    _id: '$variantId',
-                    totalQuantity: { $sum: '$quantity' },
-                    batches: {
-                        $push: {
-                            quantity: '$quantity',
-                            importDate: '$importDate',
-                            costPrice: '$costPrice'
-                        }
-                    }
+                    _id: '$orderItemDetail.productVariant',
+                    orderedQuantity: { $sum: '$orderItemDetail.quantity' }
                 }
             }
         ]);
-
-        // Create a map of variant ID to import batch data
-        const importBatchMap = importBatches.reduce((map, batch) => {
-            map[batch._id.toString()] = {
-                totalQuantity: batch.totalQuantity,
-                batches: batch.batches
-            };
+        const soldMap = soldAgg.reduce((map, item) => {
+            map[item._id.toString()] = item.orderedQuantity;
             return map;
         }, {});
 
@@ -277,16 +284,18 @@ const getCart = async (req, res) => {
             updatedAt: cart.updatedAt,
             cartItems: cart.cartItems.map(cartItem => {
                 const variantId = cartItem.productVariantId._id.toString();
-                const importBatchData = importBatchMap[variantId] || { totalQuantity: 0, batches: [] };
-                // Lấy số lượng tồn kho thực tế từ import_batches
-                const stockAvailable = importBatchData.totalQuantity;
-                const isStockAvailable = stockAvailable >= cartItem.quantity;
+                const imported = importMap[variantId] || 0;
+                const ordered = soldMap[variantId] || 0;
+                const available = imported - ordered;
+                const isStockAvailable = available >= cartItem.quantity;
 
                 return {
                     _id: cartItem._id,
                     quantity: cartItem.quantity,
                     isStockAvailable, // true nếu đủ hàng, false nếu thiếu
-                    stockAvailable,   // số lượng còn lại trong kho
+                    availableQuantity: available, // số lượng còn lại trong kho thực tế
+                    importedQuantity: imported,
+                    orderedQuantity: ordered,
                     product: {
                         _id: cartItem.productId._id,
                         name: cartItem.productId.name,
@@ -300,9 +309,9 @@ const getCart = async (req, res) => {
                                 price: cartItem.productVariantId.sellPrice,
                                 stock: cartItem.productVariantId.stock,
                                 images: cartItem.productVariantId.images,
-                                totalImportQuantity: importBatchData.totalQuantity, // tồn kho thực tế từ import_batches
-                                totalImported: importBatchData.totalQuantity, // tổng nhập kho
-                                importBatches: importBatchData.batches,
+                                importedQuantity: imported,
+                                orderedQuantity: ordered,
+                                availableQuantity: available,
                                 attributes: cartItem.productVariantId.attribute.map(attr => ({
                                     value: attr.value,
                                     description: attr.description
