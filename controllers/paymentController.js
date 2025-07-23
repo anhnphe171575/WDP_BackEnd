@@ -126,7 +126,11 @@ exports.callback = async (req, res) => {
         await orderItem.save();
         orderItemIds.push(orderItem._id);
       }
-      const voucherUser = await VoucherUser.findById( voucherId);
+      // Only fetch voucherUser if voucherId is valid
+      let voucherUser = null;
+      if (voucherId && typeof voucherId === "string" && voucherId.trim() !== "") {
+        voucherUser = await VoucherUser.findById(voucherId);
+      }
 
       // Tạo Order mới
       const newOrder = new OrderModel({
@@ -135,22 +139,24 @@ exports.callback = async (req, res) => {
         total: amount,
         paymentMethod: paymentMethod,
         address: addressObj,
-        voucher: voucherUser.voucherId ? [voucherUser.voucherId] : []
+        voucher: voucherUser && voucherUser.voucherId ? [voucherUser.voucherId] : []
       });
       await newOrder.save();
 
       // Nếu có voucherId thì cập nhật trạng thái voucher
-      if (voucherId) {
+      if (voucherId && typeof voucherId === "string" && voucherId.trim() !== "") {
         const voucherUser = await VoucherUser.findByIdAndUpdate(
           voucherId,  
           { used: true, usedAt: new Date() }
         );
         console.log("voucherUser:", voucherUser);
         // Update Voucher: increment usedCount
-        await Voucher.findByIdAndUpdate(
-          voucherUser.voucherId,
-          { $inc: { usedCount: 1 } }
-        );
+        if (voucherUser && voucherUser.voucherId) {
+          await Voucher.findByIdAndUpdate(
+            voucherUser.voucherId,
+            { $inc: { usedCount: 1 } }
+          );
+        }
       }
 
       // Xác định các cart item cần xóa (loại trừ rebuyItems)
@@ -230,7 +236,11 @@ exports.callback = async (req, res) => {
         await orderItem.save();
         orderItemIds.push(orderItem._id);
       }
-      const voucherUser = await VoucherUser.findById( voucherId);
+      // Only fetch voucherUser if voucherId is valid
+      let voucherUser = null;
+      if (voucherId && typeof voucherId === "string" && voucherId.trim() !== "") {
+        voucherUser = await VoucherUser.findById(voucherId);
+      }
       // Tạo Order mới
       const newOrder = new OrderModel({
         userId: userId,
@@ -238,24 +248,24 @@ exports.callback = async (req, res) => {
         total: amount,
         paymentMethod: paymentMethod,
         address: addressObj,
-        voucher: voucherUser.voucherId ? [voucherUser.voucherId] : []
+        voucher: voucherUser && voucherUser.voucherId ? [voucherUser.voucherId] : []
       });
       await newOrder.save();
 
       // Nếu có voucherId thì cập nhật trạng thái voucher
-      if (voucherId) {
-       
+      if (voucherId && typeof voucherId === "string" && voucherId.trim() !== "") {
         const voucherUser = await VoucherUser.findByIdAndUpdate(
           voucherId,  
           { used: true, usedAt: new Date() }
         );
         console.log("voucherUser:", voucherUser);
         // Update Voucher: increment usedCount
-        await Voucher.findByIdAndUpdate(
-          voucherUser.voucherId,
-          { $inc: { usedCount: 1 } }
-        );
-       
+        if (voucherUser && voucherUser.voucherId) {
+          await Voucher.findByIdAndUpdate(
+            voucherUser.voucherId,
+            { $inc: { usedCount: 1 } }
+          );
+        }
       }
 
       // Xác định các cart item cần xóa (loại trừ rebuyItems)

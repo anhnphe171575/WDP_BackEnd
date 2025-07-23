@@ -5,7 +5,7 @@ const verifyToken = require('../middleware/auth');
 const { ROLES } = require('../config/role');
 const authorizeRoles = require('../middleware/authorization');
 // get orders dashboard
-router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getOrdersDashboard);
+router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER, ROLES.ADMIN_BUSINESS), orderController.getOrdersDashboard);
 
 /**
  * @swagger
@@ -17,6 +17,7 @@ router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), order
  *       200:
  *         description: Thông tin doanh thu
  *         content:
+ * 
  *           application/json:
  *             schema:
  *               type: object
@@ -90,7 +91,7 @@ router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), order
  *       500:
  *         description: Lỗi server
  */
-router.get('/revenue',verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getTotalRevenue);
+router.get('/revenue',verifyToken, authorizeRoles(ROLES.ORDER_MANAGER, ROLES.ADMIN_BUSINESS), orderController.getTotalRevenue);
 
 /**
  * @swagger
@@ -300,7 +301,7 @@ router.put('/bulk-update-status', verifyToken, authorizeRoles(ROLES.ORDER_MANAGE
  *       500:
  *         description: Lỗi server
  */
-router.get('/recommend-imports', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getRecommendImports);
+router.get('/recommend-imports', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER, ROLES.ADMIN_BUSINESS), orderController.getRecommendImports);
 
 /**
  * @swagger
