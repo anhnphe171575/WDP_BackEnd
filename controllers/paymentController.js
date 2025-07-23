@@ -11,10 +11,44 @@ const ImportBatch = require("../models/import_batches");
 const User = require("../models/userModel");
 const Voucher = require("../models/voucher");
 const VoucherUser = require("../models/voucherUser");
+const { ROLES } = require("../config/role");
+
+// Helper function to find the best order manager
+async function findBestOrderManager() {
+  const ORDER_MANAGER = ROLES.ORDER_MANAGER;
+  // Lấy tất cả order managers
+  const orderManagers = await User.find({ role: ORDER_MANAGER });
+  if (orderManagers.length === 0) return null;
+  const managerIds = orderManagers.map(m => m._id);
+  // Đếm số lượng order của từng manager (status khác 'cancelled')
+  const orderStats = await OrderModel.aggregate([
+    { $match: { OrderManagerId: { $in: managerIds }, status: { $ne: 'cancelled', $ne: 'completed' } } },
+    { $group: { _id: "$OrderManagerId", orderCount: { $sum: 1 } } }
+  ]);
+  // Map OrderManagerId -> số lượng order
+  const statsMap = new Map();
+  orderStats.forEach(stat => {
+    statsMap.set(String(stat._id), stat.orderCount);
+  });
+  // Gắn số lượng order vào từng manager
+  const managersWithStats = orderManagers.map(m => {
+    return {
+      user: m,
+      orderCount: statsMap.get(String(m._id)) || 0
+    };
+  });
+  // Tìm số lượng order ít nhất
+  const minCount = Math.min(...managersWithStats.map(m => m.orderCount));
+  // Lọc ra các manager có số lượng order ít nhất
+  const candidates = managersWithStats.filter(m => m.orderCount === minCount);
+  // Random chọn 1 người trong số đó
+  const selected = candidates[Math.floor(Math.random() * candidates.length)];
+  return selected.user;
+}
 
 exports.createPayment = async (req, res) => {
   const userId = req.user.id;    
-    const {  addressId, amount, shippingMethod, paymentMethod, items,rebuyItems,voucherId} = req.body;
+    const {  addressId, amount, shippingMethod, paymentMethod, items,rebuyItems,voucherId,orderManagerId} = req.body;
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const timestamp = Date.now() % 1000000; 
     const orderCode = Number(`${timestamp}${randomNum}`.slice(-9)); 
@@ -23,7 +57,7 @@ exports.createPayment = async (req, res) => {
         orderCode,
         amount: amount,
         description: 'Thanh toan don hang',
-        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}&rebuyItems=${encodeURIComponent(JSON.stringify(rebuyItems))}&voucherId=${encodeURIComponent(voucherId)}`,
+        returnUrl: `http://localhost:3000/payment/result?items=${encodeURIComponent(JSON.stringify(items))}&addressId=${encodeURIComponent(addressId)}&amount=${encodeURIComponent(amount)}&shippingMethod=${encodeURIComponent(shippingMethod)}&paymentMethod=${encodeURIComponent(paymentMethod)}&rebuyItems=${encodeURIComponent(JSON.stringify(rebuyItems))}&voucherId=${encodeURIComponent(voucherId)}&orderManagerId=${encodeURIComponent(orderManagerId)}`,
         cancelUrl: `http://localhost:3000/payment/result`   
     };
     try {
@@ -41,7 +75,7 @@ exports.createPayment = async (req, res) => {
 
 exports.callback = async (req, res) => {
   try {
-    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode, rebuyItems,voucherId } = req.body;
+    const { items, addressId, amount, shippingMethod, paymentMethod, code, cancel, status, orderCode, rebuyItems,voucherId,orderManagerId } = req.body;
     const userId = req.user?.id || req.body.userId; // Lấy userId từ req nếu có
 
     // Parse items từ JSON string nếu cần
@@ -133,8 +167,13 @@ exports.callback = async (req, res) => {
       }
 
       // Tạo Order mới
+      const bestOrderManager = await findBestOrderManager();
+      if (!bestOrderManager) {
+        return res.status(500).json({ message: "No order manager available" });
+      }
       const newOrder = new OrderModel({
         userId: userId,
+        OrderManagerId: bestOrderManager._id,
         OrderItems: orderItemIds, 
         total: amount,
         paymentMethod: paymentMethod,
@@ -242,8 +281,13 @@ exports.callback = async (req, res) => {
         voucherUser = await VoucherUser.findById(voucherId);
       }
       // Tạo Order mới
+      const bestOrderManager = await findBestOrderManager();
+      if (!bestOrderManager) {
+        return res.status(500).json({ message: "No order manager available" });
+      }
       const newOrder = new OrderModel({
         userId: userId,
+        OrderManagerId: bestOrderManager._id,
         OrderItems: orderItemIds,
         total: amount,
         paymentMethod: paymentMethod,

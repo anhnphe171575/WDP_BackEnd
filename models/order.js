@@ -8,9 +8,13 @@ const addressSchema = new mongoose.Schema({
   postalCode: { type: String, required: true },
   country: { type: String, required: true, default: 'Vietnam' }
 }, { _id: true });
-
 const OrderSchema = new Schema({
   userId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'User'
+  },
+  OrderManagerId:{
     type: Schema.Types.ObjectId,
     required: true,
     ref: 'User'
