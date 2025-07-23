@@ -23,7 +23,7 @@ router.get('/export-csv', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), us
  *       200:
  *         description: Thành công
  */
-router.get('/', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.getAllUsers);
+router.get('/', verifyToken,  userController.getAllUsers);
 
 /**
  * @swagger
@@ -265,9 +265,9 @@ router.put('/edit-profile', verifyToken, userController.updateProfile);
 router.get('/banned', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getBannedUsers);
 router.post('/unban', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.manualUnbanUsers);
 
-router.put('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.updateUser);
-router.get('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.getUserById);
-router.delete('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_BUSINESS), userController.deleteUser);
+router.put('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.updateUser);
+router.get('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.getUserById);
+router.delete('/:id', verifyToken, authorizeRoles(ROLES.ADMIN_DEVELOPER), userController.deleteUser);
 
 /**
  * @swagger
