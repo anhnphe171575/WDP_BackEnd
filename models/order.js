@@ -51,10 +51,7 @@ const OrderSchema = new Schema({
     type: Date,
     default: Date.now
   },
-  reasonRejectCancel: {
-    type: String,
-    default: ''
-  }
+
 });
 
 module.exports = mongoose.model('Order', OrderSchema);

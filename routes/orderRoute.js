@@ -4,6 +4,38 @@ const orderController = require('../controllers/orderController');
 const verifyToken = require('../middleware/auth');
 const { ROLES } = require('../config/role');
 const authorizeRoles = require('../middleware/authorization');
+/**
+ * @swagger
+ * /api/orders/order-manager:
+ *   get:
+ *     summary: Lấy danh sách đơn hàng do order manager đang đăng nhập phụ trách
+ *     description: |
+ *       Yêu cầu phải đăng nhập với vai trò order manager. 
+ *       <br/>
+ *       **Hướng dẫn test trên Swagger UI:**
+ *       <br/>
+ *       1. Nhấn nút "Authorize" ở góc phải trên của Swagger UI.
+ *       2. Nhập token theo định dạng: `Bearer <token>`
+ *       3. Nhấn Authorize và đóng popup.
+ *       4. Thực hiện thử nghiệm API này.
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Danh sách đơn hàng do order manager này phụ trách
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Order'
+ *       401:
+ *         description: Không có quyền truy cập hoặc chưa đăng nhập
+ *       500:
+ *         description: Lỗi server
+ */
+router.get('/order-manager', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.getOrdersByOrderManagerId);
 // get orders dashboard
 router.get('/dashboard', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER, ROLES.ADMIN_BUSINESS), orderController.getOrdersDashboard);
 
@@ -366,7 +398,7 @@ router.get('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderContro
  *       400:
  *         description: Dữ liệu không hợp lệ
  */
-router.put('/:id', verifyToken, authorizeRoles(ROLES.ORDER_MANAGER), orderController.updateOrder);
+router.put('/:id',  orderController.updateOrder);
 
 /**
  * @swagger
@@ -462,7 +494,7 @@ router.delete('/:id',  orderController.deleteOrder);
  *       '500':
  *         description: Lỗi máy chủ nội bộ.
  */
-router.put('/:id/orderItem/request-return', verifyToken, authorizeRoles(ROLES.CUSTOMER), orderController.requestReturnOrderItem);
+router.put('/:id/orderItem/request-return',  orderController.requestReturnOrderItem);
 
 /**
  * @swagger

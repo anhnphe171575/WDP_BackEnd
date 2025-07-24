@@ -107,39 +107,28 @@ exports.getOrderById = async (req, res) => {
 // Update order
 exports.updateOrder = async (req, res) => {
     try {
-        const { status, paymentMethod, voucher } = req.body;
+        const { status } = req.body;
 
-        if(status == 'cancelled') {
-            // Return stock for each product in the order
-            const order = await Order.findById(req.params.id).populate('OrderItems');
-            if (!order) {
-                return res.status(404).json({ message: 'Order not found' });
-            }
-            let orderItemsId = [];
+        const order = await Order.findById(req.params.id).populate('OrderItems');
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        // Chỉ trừ kho khi chuyển từ trạng thái khác sang 'shipping'
+        if (status === 'shipping' && order.status !== 'shipping') {
             for (const item of order.OrderItems) {
-                orderItemsId.push(item);
-            }
-            const orderItems = await OrderItem.find({ _id: { $in: orderItemsId } });
-            for (const item of orderItems) {
-                // Update stock for import_batches: cộng vào batch mới nhất của variant
-                if (item.productVariant) {
-                    // Tìm batch mới nhất của variant này
-                    const latestBatch = await ImportBatch.findOne({ variantId: item.productVariant })
-                        .sort({ importDate: -1 });
-                    if (latestBatch) {
-                        latestBatch.quantity += item.quantity;
-                        await latestBatch.save();
+                if (item.productVariant && item.quantity) {
+                    // Tìm batch cũ nhất của variant này
+                    const oldBatch = await ImportBatch.findOne({ variantId: item.productVariant })
+                        .sort({ importDate: 1 }); // ngày cũ nhất
+                    if (oldBatch) {
+                        oldBatch.quantity -= item.quantity;
+                        await oldBatch.save();
                     }
                 }
             }
         }
-        const order = await Order.findById(req.params.id);
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
         order.status = status || order.status;
-        order.paymentMethod = paymentMethod || order.paymentMethod;
-        order.voucher = voucher || order.voucher;
         order.updateAt = Date.now();
         if(status === 'processing') {
             const notification = new Notification({
@@ -508,17 +497,7 @@ exports.requestCancelledOrderItem = async(req,res)=>{
                 continue;
             }
 
-            // Return stock to the OLDEST import batch
-            if (orderItem.productVariant) {
-                const oldestBatch = await ImportBatch.findOne({ variantId: orderItem.productVariant }).sort({ importDate: 1 });
-                if (oldestBatch) {
-                    oldestBatch.quantity += Number(orderItem.quantity);
-                    await oldestBatch.save();
-                } else {
-                    errorMessages.push(`Không tìm thấy lô hàng cho sản phẩm ${orderItemId} để cập nhật kho.`);
-                    continue; // Skip this item if no batch found
-                }
-            }
+           
             
             orderItem.status = 'cancelled';
             orderItem.reason = reason;
@@ -640,6 +619,39 @@ exports.rejectReturnRequest = async (req, res) => {
 exports.getOrderByUserId = async (req, res) => {
     try {
         const orders = await Order.find({ userId: req.params.userId })
+            .populate('userId', 'name email address')
+            .populate({
+                path: 'OrderItems',
+                populate: [
+                    {
+                        path: 'productId',
+                        model: 'Product',
+                        select: 'name'
+                    },
+                    {
+                        path: 'productVariant',
+                        model: 'ProductVariant',
+                        select: 'images ',
+                        populate: {
+                            path: 'attribute',
+                            model: 'Attribute',
+                            select: 'value description'
+                        }
+                    }
+                ]
+            })
+            .populate('voucher');
+        res.status(200).json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get orders by OrderManagerId (from token)
+exports.getOrdersByOrderManagerId = async (req, res) => {
+    try {
+        const orderManagerId = req.user.id;
+        const orders = await Order.find({ OrderManagerId: orderManagerId })
             .populate('userId', 'name email address')
             .populate({
                 path: 'OrderItems',
